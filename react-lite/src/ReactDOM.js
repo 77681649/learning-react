@@ -32,11 +32,11 @@ let vnodeStore = {}
 /**
  * 将vnode渲染到指定的容器元素中
  * 
- * @param {any} vnode 
- * @param {any} container 
- * @param {any} [callback] 
- * @param {any} [parentContext] 
- * @returns 
+ * @param {VNode} vnode 虚拟节点
+ * @param {HtmlElement} container 容器元素
+ * @param {Function} [callback] 回调函数
+ * @param {Object} [parentContext] 父级元素的上下文
+ * @returns {VNode}
  */
 function renderTreeIntoContainer(vnode, container, callback, parentContext) {
 
@@ -199,6 +199,14 @@ function callCallback(callback, context) {
   }
 }
 
+/**
+ * 将vnode渲染到指定的容器元素中
+ * 
+ * @param {VNode} vnode 虚拟节点
+ * @param {HtmlElement} container 容器元素
+ * @param {Function} [callback] 回调函数
+ * @returns {VNode}
+ */
 export function render(vnode, container, callback) {
   return renderTreeIntoContainer(vnode, container, callback)
 }
