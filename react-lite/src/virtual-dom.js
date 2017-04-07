@@ -11,11 +11,11 @@ import {
 /**
  * VNode
  * @typedef {Object} 
- * @property {String} [uid] 组件的唯一标识
+ * @property {String} [uid] 节点的唯一标识
  * @property {Number} vtype 1 = 文本 , 2 = 元素 , 3 = 无状态组件 , 4 = 有状态的组件 , 5 = 注释
- * @property {String | Component | Function} type
- * @property {Object} props 节点的属性
+ * @property {String | Component | Function} type [ 2 = 元素名称(标签名称) , 3 = 组件的构造器 , 4 = 组件构造函数]
  * @property {String} key 节点的键
+ * @property {Object} props 节点的属性
  * @property {Object} refs 
  * @property {String | Function} ref
  */
@@ -23,7 +23,7 @@ import {
 /**
  * DOM 节点的附加属性
  * vchildren {VNode[]} 存储该节点的所有子元素 ( 后序遍历树的结果 )
- * cache {Map<uid , NodeCache>}
+ * cache {Map<uid , Object>} 无状态组件 , 保存无状态组件渲染出来的虚拟接节点树 ; 
  */
 
 /**
@@ -59,9 +59,11 @@ export function createVnode(vtype, type, props, key, ref) {
     key: key,
     ref: ref,
   }
+
   if (vtype === VSTATELESS || vtype === VCOMPONENT) {
     vnode.uid = _.getUid()
   }
+
   return vnode
 }
 
@@ -248,7 +250,7 @@ function initVchildren(velem, node, parentContext) {
   let vchildren = node.vchildren = getFlattenChildren(velem)
   let namespaceURI = node.namespaceURI
 
-  renderVChildren(vchildren, parentContext, namespaceURI)
+  renderVchildren(node, vchildren, parentContext, namespaceURI)
 }
 
 /**
@@ -317,16 +319,22 @@ function handleChildImmutableData(data, children) {
   treePostOrder(data, collectChild, children)
 }
 
-function renderVChildren(vnodes, parentContext, namespaceURI) {
-  vnodes.forEach(
-    vnode => renderVNode(vnode, parentContext, namespaceURI)
-  )
-}
+/**
+ * 
+ * 
+ * @param {any} rootNode 
+ * @param {any} vnodes 
+ * @param {any} parentContext 
+ * @param {any} namespaceURI 
+ */
+function renderVchildren(rootNode, vnodes, parentContext, namespaceURI) {
+  let renderChildNode = vnode => initVnode(vnode, parentContext, namespaceURI)
 
-function renderVNode(rootNode, vnode, parentContext, namespaceURI) {
-  let node = initVnode(vnode, parentContext, namespaceURI)
+  vnodes.forEach(vnode => {
+    let childNode = renderChildNode(vnode)
 
-  rootNode.appendChild(node)
+    rootNode.appendChild(node)
+  })
 }
 
 
@@ -489,7 +497,7 @@ function destroyVelem(velem, node) {
 //
 
 /**
- * 
+ * 根据无状态组件 , 创建对应的DOM Tree
  * 
  * @param {VNode} vstateless 
  * @param {any} parentContext 
@@ -500,8 +508,7 @@ function initVstateless(vstateless, parentContext, namespaceURI) {
   let vnode = renderVstateless(vstateless, parentContext)
   let node = initVnode(vnode, parentContext, namespaceURI)
 
-  node.cache = node.cache || {}
-  node.cache[vstateless.uid] = vnode
+  addCache(node, vnode, vstateless.uid)
 
   return node
 }
@@ -528,9 +535,9 @@ function destroyVstateless(vstateless, node) {
 }
 
 /**
- * 渲染无状态组件
+ * 渲染出无状态组件对应的虚拟节点树
  * 
- * @param {VNode} vstateless 
+ * @param {VNode} vstateless 无状态组件
  * @param {Object} parentContext 
  * @returns {VNode}
  */
@@ -539,7 +546,7 @@ function renderVstateless(vstateless, parentContext) {
   let componentContext = getContextByTypes(parentContext, factory.contextTypes)
   let vnode = factory(props, componentContext)
 
-  if (vnode && vnode.render) {  
+  if (vnode && vnode.render) {
     vnode = vnode.render()
   }
 
@@ -559,15 +566,27 @@ function renderVstateless(vstateless, parentContext) {
 //
 // ------------------------------------------------ STATE COMPONENT
 //
+
+/**
+ * 根据有状态的组件 , 创建对应的DOM Tree
+ * 
+ * @param {VNode} vcomponent 虚拟组件
+ * @param {Object} parentContext 
+ * @param {any} namespaceURI 
+ * @returns {HtmlElement}
+ */
 function initVcomponent(vcomponent, parentContext, namespaceURI) {
   let { type: Component, props, uid } = vcomponent
   let componentContext = getContextByTypes(parentContext, Component.contextTypes)
   let component = new Component(props, componentContext)
   let { $updater: updater, $cache: cache } = component
+
   cache.parentContext = parentContext
+
   updater.isPending = true
   component.props = component.props || props
   component.context = component.context || componentContext
+
   if (component.componentWillMount) {
     component.componentWillMount()
     component.state = updater.getState()
@@ -587,6 +606,10 @@ function initVcomponent(vcomponent, parentContext, namespaceURI) {
   }
 
   return node
+}
+
+function createComponentInstance() {
+  
 }
 
 function updateVcomponent(vcomponent, newVcomponent, node, parentContext) {
@@ -768,6 +791,16 @@ export function syncCache(cache, oldCache, node) {
   }
 }
 
+/**
+ * 添加缓存 
+ * @param {any} cache 
+ * @param {any} node 
+ * @param {any} key 
+ */
+function addCache(cache, node, key) {
+  node.cache = node.cache || {}
+  node.cache[key] = cache
+}
 
 
 //
@@ -807,21 +840,25 @@ function isImutableJSData(data) {
 }
 
 /**
+ * 根据模型 , 生成对应模型的上下文对象
  * 
- * 
- * @param {any} curContext 
- * @param {any} contextTypes 
- * @returns 
+ * @param {Object} curContext 当前上下文
+ * @param {Object} contextTypes 定义的上下文模型
+ * @returns {Object}
  */
 function getContextByTypes(curContext, contextTypes) {
   let context = {}
+
   if (!contextTypes || !curContext) {
     return context
   }
+
   for (let key in contextTypes) {
     if (contextTypes.hasOwnProperty(key)) {
       context[key] = curContext[key]
     }
   }
+
   return context
 }
+
