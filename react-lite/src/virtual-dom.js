@@ -37,35 +37,13 @@ import {
  */
 let refs = null
 
-
-
-
 /**
- * 创建一个虚拟节点
- * @export
- * @param {any} vtype 
- * @param {any} type 
- * @param {any} props 
- * @param {any} key 
- * @param {any} ref 
- * @returns {VNode}
+ * 
  */
-export function createVnode(vtype, type, props, key, ref) {
-  let vnode = {
-    vtype: vtype,
-    type: type,
-    props: props,
-    refs: refs,
-    key: key,
-    ref: ref,
-  }
+let pendingComponents = []
 
-  if (vtype === VSTATELESS || vtype === VCOMPONENT) {
-    vnode.uid = _.getUid()
-  }
 
-  return vnode
-}
+
 
 /**
  * 根据虚拟节点 , 创建对应的DOM Tree , 并返回创建的DOM Tree
@@ -75,7 +53,7 @@ export function createVnode(vtype, type, props, key, ref) {
  * @param {String} namespaceURI 
  * @returns {HtmlElement}
  */
-export function initVnode(vnode, parentContext, namespaceURI) {
+function initVnode(vnode, parentContext, namespaceURI) {
   let { vtype } = vnode
   let creator = null
 
@@ -176,7 +154,7 @@ function applyCreate(data) {
  * Only vnode which has props.children need to call destroy function
  * to check whether subTree has component that need to call lify-cycle method and release cache.
  */
-export function destroyVnode(vnode, node) {
+function destroyVnode(vnode, node) {
   let { vtype } = vnode
   if (vtype === VELEMENT) { // destroy element
     destroyVelem(vnode, node)
@@ -577,27 +555,23 @@ function renderVstateless(vstateless, parentContext) {
  */
 function initVcomponent(vcomponent, parentContext, namespaceURI) {
   let { type: Component, props, uid } = vcomponent
-  let componentContext = getContextByTypes(parentContext, Component.contextTypes)
-  let component = new Component(props, componentContext)
-  let { $updater: updater, $cache: cache } = component
+  let component = createComponentInstance(Component, props, parentContext)
+  let { $cache: cache } = component
 
-  cache.parentContext = parentContext
+  component.pendingUpdater()
 
-  updater.isPending = true
-  component.props = component.props || props
-  component.context = component.context || componentContext
+  component.tryEmitComponentWillMount()
 
-  if (component.componentWillMount) {
-    component.componentWillMount()
-    component.state = updater.getState()
-  }
   let vnode = renderComponent(component)
   let node = initVnode(vnode, getChildContext(component, parentContext), namespaceURI)
+
   node.cache = node.cache || {}
   node.cache[uid] = component
+
   cache.vnode = vnode
   cache.node = node
   cache.isMounted = true
+
   _.addItem(pendingComponents, component)
 
   if (vcomponent.ref != null) {
@@ -608,8 +582,50 @@ function initVcomponent(vcomponent, parentContext, namespaceURI) {
   return node
 }
 
-function createComponentInstance() {
-  
+function createComponentInstance(Component, props, parentContext) {
+  let componentContext = getContextByTypes(parentContext, Component.contextTypes)
+  let component = new Component(props, componentContext)
+
+  component.$cache.parentContext = parentContext
+
+  // component.props = component.props || props
+  // component.context = component.context || componentContext
+
+  return component
+}
+
+/**
+ * 根据状态组件 , 渲染响应的虚拟节点
+ * 
+ * @param {VNode} component 
+ * @param {Object} parentContext 
+ * @returns {VNode}
+ */
+function renderComponent(component, parentContext) {
+  // 通过全局变量的方式 , 将组件的refs方法
+  refs = component.refs
+
+  let vnode = component.render()
+
+  if (vnode === null || vnode === false) {
+    vnode = createVnode(VCOMMENT)
+  } else if (!vnode || !vnode.vtype) {
+    throw new Error(`@${component.constructor.name}#render:You may have returned undefined, an array or some other invalid object`)
+  }
+
+  refs = null
+
+  return vnode
+}
+
+function getChildContext(component, parentContext) {
+  if (component.getChildContext) {
+    let curContext = component.getChildContext()
+    if (curContext) {
+      parentContext = _.extend(_.extend({}, parentContext), curContext)
+    }
+  }
+  return parentContext
 }
 
 function updateVcomponent(vcomponent, newVcomponent, node, parentContext) {
@@ -654,32 +670,6 @@ function destroyVcomponent(vcomponent, node) {
   cache.node = cache.parentContext = cache.vnode = component.refs = component.context = null
 }
 
-
-
-export function renderComponent(component, parentContext) {
-  refs = component.refs
-  let vnode = component.render()
-  if (vnode === null || vnode === false) {
-    vnode = createVnode(VCOMMENT)
-  } else if (!vnode || !vnode.vtype) {
-    throw new Error(`@${component.constructor.name}#render:You may have returned undefined, an array or some other invalid object`)
-  }
-  refs = null
-  return vnode
-}
-
-export function getChildContext(component, parentContext) {
-  if (component.getChildContext) {
-    let curContext = component.getChildContext()
-    if (curContext) {
-      parentContext = _.extend(_.extend({}, parentContext), curContext)
-    }
-  }
-  return parentContext
-}
-
-
-let pendingComponents = []
 function clearPendingComponents() {
   let len = pendingComponents.length
   if (!len) {
@@ -723,12 +713,12 @@ function clearPendingRefs() {
   }
 }
 
-export function clearPending() {
+function clearPending() {
   clearPendingRefs()
   clearPendingComponents()
 }
 
-export function compareTwoVnodes(vnode, newVnode, node, parentContext) {
+function compareTwoVnodes(vnode, newVnode, node, parentContext) {
   let newNode = node
   if (newVnode == null) {
     // remove
@@ -776,7 +766,7 @@ function detachRef(refs, refKey, refValue) {
   }
 }
 
-export function syncCache(cache, oldCache, node) {
+function syncCache(cache, oldCache, node) {
   for (let key in oldCache) {
     if (!oldCache.hasOwnProperty(key)) {
       continue
@@ -840,6 +830,33 @@ function isImutableJSData(data) {
 }
 
 /**
+ * 创建一个虚拟节点
+ * @param {String} [uid] 节点的唯一标识
+ * @param {Number} vtype 1 = 文本 , 2 = 元素 , 3 = 无状态组件 , 4 = 有状态的组件 , 5 = 注释
+ * @param {String | Component | Function} type [ 2 = 元素名称(标签名称) , 3 = 组件的构造器 , 4 = 组件构造函数]
+ * @param {String} key 节点的键
+ * @param {Object} props 节点的属性
+ * @param {String | Function} ref
+ * @returns {VNode}
+ */
+function createVnode(vtype, type, props, key, ref) {
+  let vnode = {
+    vtype: vtype,
+    type: type,
+    props: props,
+    refs: refs,   // 当前有状态组件的refs属性 ( 其他类型的虚拟节点 refs = null )
+    key: key,
+    ref: ref,
+  }
+
+  if (vtype === VSTATELESS || vtype === VCOMPONENT) {
+    vnode.uid = _.getUid()
+  }
+
+  return vnode
+}
+
+/**
  * 根据模型 , 生成对应模型的上下文对象
  * 
  * @param {Object} curContext 当前上下文
@@ -862,3 +879,16 @@ function getContextByTypes(curContext, contextTypes) {
   return context
 }
 
+
+export {
+  createVnode,
+  initVnode,
+  destroyVnode,
+  compareTwoVnodes,
+
+  syncCache,
+  renderComponent,
+  getChildContext,
+
+  clearPending
+}
