@@ -14,15 +14,48 @@ import {
  * @property {Object} [parentContext] 父级的上下文
  */
 
+/**
+ * 
+ */
+
 
 
 export let updateQueue = {
+
+  /**
+   * 更新器队列
+   * @type {Update[]}
+   */
   updaters: [],
+
+  /**
+   * @type {Boolean}
+   */
   isPending: false,
+
+  isReady() {
+    return !this.isPending
+  },
+
+  ready() {
+    this.isPending = false
+  },
+
+  pending() {
+    this.isPending = true
+  },
+
+  /**
+   * 添加更新器
+   * @param {Updater} updater 
+   */
   add(updater) {
     _.addItem(this.updaters, updater)
   },
 
+  /**
+   * 
+   */
   batchUpdate() {
     if (this.isPending) {
       return
@@ -59,7 +92,8 @@ function Updater(instance) {
   this.instance = instance
 
   /**
-   * @type {}
+   * 存储等待更新的"状态更新""
+   * @type {Array[String | Function]}
    */
   this.pendingStates = []
 
@@ -83,6 +117,9 @@ function Updater(instance) {
    */
   this.nextProps = this.nextContext = null
 
+  /**
+   * 
+   */
   this.clearCallbacks = this.clearCallbacks.bind(this)
 }
 
@@ -102,16 +139,16 @@ Updater.prototype = {
       : updateQueue.add(this)
   },
 
-  isReady() {
+  isLocked() {
     return !this.isPending
   },
 
-  ready() {
-    this.pending = false
+  unlock() {
+    this.isPending = false
   },
 
-  pending() {
-    this.pending = true
+  lock() {
+    this.isPending = true
   },
 
   /**
@@ -130,61 +167,85 @@ Updater.prototype = {
   },
 
   /**
-   * 
-   * 
+   * 添加一个"状态更新"
    * @param {any} nextState 
    */
   addState(nextState) {
     if (nextState) {
       _.addItem(this.pendingStates, nextState)
 
-      if (this.isReady()) {
+      if (this.isLocked()) {
         this.emitUpdate()
       }
     }
   },
 
   /**
-   * 
-   * 
+   * 替换状态
    * @param {any} nextState 
    */
   replaceState(nextState) {
     let { pendingStates } = this
+
     pendingStates.pop()
+
     // push special params to point out should replace state
     _.addItem(pendingStates, [nextState])
   },
 
   /**
-   * 
+   * 获得状态
    * 
    * @returns 
    */
   getState() {
-    let { instance, pendingStates } = this
+    let { instance } = this
     let { state, props } = instance
-    if (pendingStates.length) {
-      state = _.extend({}, state)
-      pendingStates.forEach(nextState => {
-        let isReplace = _.isArr(nextState)
-        if (isReplace) {
-          nextState = nextState[0]
-        }
-        if (_.isFn(nextState)) {
-          nextState = nextState.call(instance, state, props)
-        }
-        // replace state
-        if (isReplace) {
-          state = _.extend({}, nextState)
-        } else {
-          _.extend(state, nextState)
-        }
-      })
-      pendingStates.length = 0
+
+    if (this.hasPendingState()) {
+      state = this.handlePendingStateQueue(state, props)
+
+      this.clearPendingStateQueue()
     }
+
     return state
   },
+
+  hasPendingState() {
+    return this.pendingStates.length
+  },
+
+  handlePendingStateQueue(componentState, componentProps) {
+    let state = _.extend({}, componentState)
+
+    this.pendingStates.forEach(nextState => {
+      let isReplace = isReplaceState(nextState)
+
+      // 特殊处理 : 替换状态
+      if (isReplace) {
+        nextState = nextState[0]
+      }
+
+      if (_.isFn(nextState)) {
+        nextState = nextState.call(instance, state, componentProps)
+      }
+
+      // 特殊处理 : 替换状态
+      if (isReplace) {
+        state = _.extend({}, nextState)
+      } else {
+        _.extend(state, nextState)
+      }
+    })
+
+    return state
+  },
+
+  clearPendingStateQueue() {
+    this.pendingStates.length = 0
+  },
+
+
 
   /**
    * 
@@ -208,6 +269,10 @@ Updater.prototype = {
       _.addItem(this.pendingCallbacks, callback)
     }
   }
+}
+
+function isReplaceState(nextState) {
+  return _.isArr(nextState)
 }
 
 function shouldUpdate(component, nextProps, nextState, nextContext, callback) {
@@ -381,15 +446,15 @@ Component.prototype = {
   /**
    * 
    */
-  readyUpdater() {
-    this.$updater.ready()
+  lockUpdater() {
+    this.$updater.lock()
   },
 
   /**
    * 
    */
-  pendingUpdater() {
-    this.$updater.pending()
+  unlockUpdater() {
+    this.$updater.unlock()
   },
 
   tryEmitComponentWillMount() {
@@ -397,6 +462,18 @@ Component.prototype = {
       this.componentWillMount()
       this.state = this.$updater.getState()
     }
+  },
+
+  setCache(cache) {
+    _.extend(this.$cache, cache)
+  },
+
+  updateNodeInfo(vnode, node) {
+    this.setCache({ vnode, node })
+  },
+
+  updateMountedState() {
+    this.setCache({ isMounted: true })
   }
 }
 

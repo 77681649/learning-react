@@ -42,7 +42,7 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
 
   ensureRenderParamIsValid(vnode, container)
 
-  let id = getContainerID()
+  let id = getContainerID(container)
 
   let saveContainerArgument = () => {
     let argument = { vnode, callback, parentContext }
@@ -52,9 +52,7 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
       : updateContainerArgument(id, argument)
   }
 
-  let getContainerArgument = () => getContainerArgument(id)
-
-  let argsCache = getContainerArgument()
+  let argsCache = getContainerArgument(id)
 
   let rendered = !!argsCache
 
@@ -68,7 +66,7 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
 
   lockContainer(id)
 
-  renderDOMTreeToContainer(id, vnode, container, parentContext)
+  let rootNode = renderDOMTreeToContainer(id, vnode, container, parentContext)
 
   let isPending = updateQueue.isPending
   updateQueue.isPending = true
@@ -165,16 +163,17 @@ function renderDOMTreeToContainer(id, vnode, container, parentContext) {
     : initVnode(vnode, parentContext, container.namespaceURI)
 
   if (!rendered) {
+    clearAllChildNode(container)
     appendToContainer(container, rootNode)
   }
 
   setVNodeCache(id, vnode)
+
+  return rootNode
 }
 
-function appendToContainer(container, vnode) {
-  clearAllChildNode(container)
-
-  container.appendChild(rootNode)
+function appendToContainer(container, node) {
+  container.appendChild(node)
 }
 
 function clearAllChildNode(node) {

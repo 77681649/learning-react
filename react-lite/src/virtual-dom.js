@@ -37,11 +37,6 @@ import {
  */
 let refs = null
 
-/**
- * 
- */
-let pendingComponents = []
-
 
 
 
@@ -190,9 +185,8 @@ function initText(vnode) {
  */
 function initVelem(velem, parentContext, namespaceURI) {
   let { type, props } = velem
-  let rootNode = createElement(vnode)
 
-  let createRootElement = (vnode, namespaceURI) => {
+  let createElement = (vnode, namespaceURI) => {
     let { type } = vnode
 
     return type === 'svg' || namespaceURI === SVGNamespaceURI
@@ -205,6 +199,8 @@ function initVelem(velem, parentContext, namespaceURI) {
 
     _.setProps(rootNode, props, isCustomComponent)
   }
+
+  let rootNode = createElement(velem)
 
   initVchildren(velem, rootNode, parentContext)
 
@@ -284,7 +280,7 @@ function treePostOrder(rootNode, iterate, nodes) {
 }
 
 function isInvalidChildNode(child) {
-  return child == null && typeof child === 'boolean'
+  return child == null || typeof child === 'boolean'
 }
 
 function handleChildText(child) {
@@ -311,7 +307,7 @@ function renderVchildren(rootNode, vnodes, parentContext, namespaceURI) {
   vnodes.forEach(vnode => {
     let childNode = renderChildNode(vnode)
 
-    rootNode.appendChild(node)
+    rootNode.appendChild(childNode)
   })
 }
 
@@ -557,26 +553,26 @@ function initVcomponent(vcomponent, parentContext, namespaceURI) {
   let { type: Component, props, uid } = vcomponent
   let component = createComponentInstance(Component, props, parentContext)
   let { $cache: cache } = component
+  let vnode, node
 
-  component.pendingUpdater()
+  component.lockUpdater()
 
   component.tryEmitComponentWillMount()
 
-  let vnode = renderComponent(component)
-  let node = initVnode(vnode, getChildContext(component, parentContext), namespaceURI)
+  vnode = renderComponent(component)
 
-  node.cache = node.cache || {}
-  node.cache[uid] = component
+  node = initVnode(vnode, getChildContext(component, parentContext), namespaceURI)
 
-  cache.vnode = vnode
-  cache.node = node
-  cache.isMounted = true
+  addCache(component, node, uid)
 
-  _.addItem(pendingComponents, component)
+  component.updateNodeInfo(vnode, node)
+  component.updateMountedState(true)
 
+  addPendingComponentQueue(component)
+
+  // 记录 refs
   if (vcomponent.ref != null) {
-    _.addItem(pendingRefs, vcomponent)
-    _.addItem(pendingRefs, component)
+    enqueuePendingsRefs(vcomponent, component)
   }
 
   return node
@@ -602,7 +598,7 @@ function createComponentInstance(Component, props, parentContext) {
  * @returns {VNode}
  */
 function renderComponent(component, parentContext) {
-  // 通过全局变量的方式 , 将组件的refs方法
+  // 通过全局变量的方式 , 将组件的refs属性挂载到对应的VNode中
   refs = component.refs
 
   let vnode = component.render()
@@ -618,6 +614,13 @@ function renderComponent(component, parentContext) {
   return vnode
 }
 
+/**
+ * 获得传递给子组件的上下文
+ * 
+ * @param {Object} component 
+ * @param {Object} parentContext 
+ * @returns 
+ */
 function getChildContext(component, parentContext) {
   if (component.getChildContext) {
     let curContext = component.getChildContext()
@@ -625,6 +628,7 @@ function getChildContext(component, parentContext) {
       parentContext = _.extend(_.extend({}, parentContext), curContext)
     }
   }
+
   return parentContext
 }
 
@@ -670,6 +674,15 @@ function destroyVcomponent(vcomponent, node) {
   cache.node = cache.parentContext = cache.vnode = component.refs = component.context = null
 }
 
+/**
+ * 
+ */
+let pendingComponents = []
+
+function addPendingComponentQueue(component) {
+  _.addItem(pendingComponents, component)
+}
+
 function clearPendingComponents() {
   let len = pendingComponents.length
   if (!len) {
@@ -689,30 +702,11 @@ function clearPendingComponents() {
   }
 }
 
+
+
 /**
  * 
  */
-let pendingRefs = []
-
-function enqueuePendingsRefs(vnode, node) {
-  _.addItem(pendingRefs, vnode)
-  _.addItem(pendingRefs, node)
-}
-
-function clearPendingRefs() {
-  let len = pendingRefs.length
-  if (!len) {
-    return
-  }
-  let list = pendingRefs
-  pendingRefs = []
-  for (let i = 0; i < len; i += 2) {
-    let vnode = list[i]
-    let refValue = list[i + 1]
-    attachRef(vnode.refs, vnode.ref, refValue)
-  }
-}
-
 function clearPending() {
   clearPendingRefs()
   clearPendingComponents()
@@ -740,31 +734,7 @@ function getDOMNode() {
   return this
 }
 
-function attachRef(refs, refKey, refValue) {
-  if (refKey == null || !refValue) {
-    return
-  }
-  if (refValue.nodeName && !refValue.getDOMNode) {
-    // support react v0.13 style: this.refs.myInput.getDOMNode()
-    refValue.getDOMNode = getDOMNode
-  }
-  if (_.isFn(refKey)) {
-    refKey(refValue)
-  } else if (refs) {
-    refs[refKey] = refValue
-  }
-}
 
-function detachRef(refs, refKey, refValue) {
-  if (refKey == null) {
-    return
-  }
-  if (_.isFn(refKey)) {
-    refKey(null)
-  } else if (refs && refs[refKey] === refValue) {
-    delete refs[refKey]
-  }
-}
 
 function syncCache(cache, oldCache, node) {
   for (let key in oldCache) {
@@ -800,6 +770,77 @@ function initComment(vnode) {
   return document.createComment(`react-text: ${vnode.uid || _.getUid()}`)
 }
 
+
+
+
+//
+// ------------------------------------------------ PENDING REFS
+//
+/**
+ * 
+ * [ vnode1 , node1 , vnode2,node2 , ...  ]
+ */
+let pendingRefs = []
+
+/**
+ * 
+ * ( 组件特有 )
+ * 
+ * 
+ * 
+ * @param {VNode} vnode 
+ * @param {HtmlElement} node 
+ */
+function enqueuePendingsRefs(vnode, node) {
+  _.addItem(pendingRefs, vnode)
+  _.addItem(pendingRefs, node)
+}
+
+/**
+ * 
+ */
+function clearPendingRefs() {
+  let len = pendingRefs.length
+
+  if (!len) {
+    return
+  }
+
+  let list = pendingRefs
+  pendingRefs = []
+  
+  for (let i = 0; i < len; i += 2) {
+    let vnode = list[i]
+    let refValue = list[i + 1]
+    attachRef(vnode.refs, vnode.ref, refValue)
+  }
+}
+
+function attachRef(refs, refKey, refValue) {
+  if (refKey == null || !refValue) {
+    return
+  }
+  if (refValue.nodeName && !refValue.getDOMNode) {
+    // support react v0.13 style: this.refs.myInput.getDOMNode()
+    refValue.getDOMNode = getDOMNode
+  }
+  if (_.isFn(refKey)) {
+    refKey(refValue)
+  } else if (refs) {
+    refs[refKey] = refValue
+  }
+}
+
+function detachRef(refs, refKey, refValue) {
+  if (refKey == null) {
+    return
+  }
+  if (_.isFn(refKey)) {
+    refKey(null)
+  } else if (refs && refs[refKey] === refValue) {
+    delete refs[refKey]
+  }
+}
 
 
 
