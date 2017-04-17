@@ -1,14 +1,22 @@
+/**
+ * 事件系统
+ * event-system
+ */
+
 import { updateQueue } from './Component'
 import * as _ from './util'
 
-// event config
+/**
+ * 不冒泡的事件集合
+ * @const {Object}
+ * @public
+ */
 export const unbubbleEvents = {
     /**
      * should not bind mousemove in document scope
      * even though mousemove event can bubble
      */
     onmousemove: 1,
-    ontouchmove: 1,
     onmouseleave: 1,
     onmouseenter: 1,
     onload: 1,
@@ -24,10 +32,16 @@ export const unbubbleEvents = {
     ondragexit: 1,
     ondraggesture: 1,
     ondragover: 1,
-    oncontextmenu: 1,
-    onerror: 1,
+    oncontextmenu: 1
 }
 
+/**
+ * 根据属性键 , 获得对应的事件名称
+ * @param {String} key 属性键
+ * @returns {String}
+ * 
+ * @public
+ */
 export function getEventName(key) {
     if (key === 'onDoubleClick') {
         key = 'ondblclick'
@@ -47,7 +61,19 @@ let inMobile = 'ontouchstart' in document
 let emptyFunction = () => {}
 let ON_CLICK_KEY = 'onclick'
 
+/**
+ * 
+ * @type {Object}
+ * @private
+ */
 let eventTypes = {}
+
+/**
+ * 添加事件
+ * @param {HTMLElement} elem 元素
+ * @param {String} eventType 事件类型
+ * @param {Function} listener 监听器
+ */
 export function addEvent(elem, eventType, listener) {
     eventType = getEventName(eventType)
 
@@ -63,6 +89,7 @@ export function addEvent(elem, eventType, listener) {
         eventTypes[eventType] = true
     }
 
+    // 处理safari的BUG
     if (inMobile && eventType === ON_CLICK_KEY) {
         elem.addEventListener('click', emptyFunction, false)
         return
@@ -75,6 +102,13 @@ export function addEvent(elem, eventType, listener) {
     }
 }
 
+/**
+ * 移除事件
+ * @param {HTMLElement} elem 元素
+ * @param {String} eventType 事件类型
+ * 
+ * @public
+ */
 export function removeEvent(elem, eventType) {
     eventType = getEventName(eventType)
 
@@ -96,12 +130,19 @@ export function removeEvent(elem, eventType) {
     }
 }
 
+/**
+ * 分发冒泡的事件
+ * @param {Event} event
+ * 
+ * @private
+ */
 function dispatchEvent(event) {
     let { target, type } = event
     let eventType = 'on' + type
     let syntheticEvent
 
     updateQueue.isPending = true
+    
     while (target) {
         let { eventStore } = target
         let listener = eventStore && eventStore[eventType]
@@ -119,10 +160,17 @@ function dispatchEvent(event) {
         }
         target = target.parentNode
     }
+
     updateQueue.isPending = false
     updateQueue.batchUpdate()
 }
 
+/**
+ * 分发不冒泡的事件
+ * @param {Event} event
+ * 
+ * @private
+ */
 function dispatchUnbubbleEvent(event) {
     let target = event.currentTarget || event.target
     let eventType = 'on' + event.type
@@ -141,6 +189,13 @@ function dispatchUnbubbleEvent(event) {
     updateQueue.batchUpdate()
 }
 
+/**
+ * 创建合成之后的Event
+ * @param {Event} nativeEvent
+ * @returns {SyntheticEvent}
+ * 
+ * @private
+ */
 function createSyntheticEvent(nativeEvent) {
     let syntheticEvent = {}
     let cancelBubble = () => syntheticEvent.$cancelBubble = true

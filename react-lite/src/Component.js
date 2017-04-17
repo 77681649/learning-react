@@ -6,6 +6,8 @@ import {
   getChildContext,
   syncCache
 } from './virtual-dom'
+import * as Updater from './ComponentStateUpdater'
+
 
 /**
  * ComponentCache
@@ -13,287 +15,6 @@ import {
  * @property {Boolean} [isMounted=false] 组件是否已经mount
  * @property {Object} [parentContext] 父级的上下文
  */
-
-/**
- * 
- */
-
-
-
-export let updateQueue = {
-
-  /**
-   * 更新器队列
-   * @type {Update[]}
-   */
-  updaters: [],
-
-  /**
-   * @type {Boolean}
-   */
-  isPending: false,
-
-  isReady() {
-    return !this.isPending
-  },
-
-  ready() {
-    this.isPending = false
-  },
-
-  pending() {
-    this.isPending = true
-  },
-
-  /**
-   * 添加更新器
-   * @param {Updater} updater 
-   */
-  add(updater) {
-    _.addItem(this.updaters, updater)
-  },
-
-  /**
-   * 
-   */
-  batchUpdate() {
-    if (this.isPending) {
-      return
-    }
-    this.isPending = true
-		/*
-		 each updater.update may add new updater to updateQueue
-		 clear them with a loop
-		 event bubbles from bottom-level to top-level
-		 reverse the updater order can merge some props and state and reduce the refresh times
-		 see Updater.update method below to know why
-		*/
-    let { updaters } = this
-    let updater
-    while (updater = updaters.pop()) {
-      updater.updateComponent()
-    }
-    this.isPending = false
-  }
-}
-
-
-
-/**
- * 更新器
- * 
- * @param {any} instance 
- */
-function Updater(instance) {
-	/**
-   * 更新器的服务实例 ( 组件 )
-   * @type {Component}
-   */
-  this.instance = instance
-
-  /**
-   * 存储等待更新的"状态更新""
-   * @type {Array[String | Function]}
-   */
-  this.pendingStates = []
-
-  /**
-   * 
-   * @type {}
-   */
-  this.pendingCallbacks = []
-
-  /**
-   * 是否准备就绪
-   * true  = 等待状态 , 表示当添加状态更新操作时 , 
-   * false = 就绪状态 , 表示当添加状态更新操作时 , 可以直接触发更新操作
-   * @type {Boolean} 
-   * @default false
-   */
-  this.isPending = false
-
-  /**
-   * 
-   */
-  this.nextProps = this.nextContext = null
-
-  /**
-   * 
-   */
-  this.clearCallbacks = this.clearCallbacks.bind(this)
-}
-
-Updater.prototype = {
-  /**
-   * 
-   * 
-   * @param {any} nextProps 
-   * @param {any} nextContext 
-   */
-  emitUpdate(nextProps, nextContext) {
-    this.nextProps = nextProps
-    this.nextContext = nextContext
-    // receive nextProps!! should update immediately
-    nextProps || !updateQueue.isPending
-      ? this.updateComponent()
-      : updateQueue.add(this)
-  },
-
-  isLocked() {
-    return !this.isPending
-  },
-
-  unlock() {
-    this.isPending = false
-  },
-
-  lock() {
-    this.isPending = true
-  },
-
-  /**
-   * 
-   * 
-   */
-  updateComponent() {
-    let { instance, pendingStates, nextProps, nextContext } = this
-    if (nextProps || pendingStates.length > 0) {
-      nextProps = nextProps || instance.props
-      nextContext = nextContext || instance.context
-      this.nextProps = this.nextContext = null
-      // merge the nextProps and nextState and update by one time
-      shouldUpdate(instance, nextProps, this.getState(), nextContext, this.clearCallbacks)
-    }
-  },
-
-  /**
-   * 添加一个"状态更新"
-   * @param {any} nextState 
-   */
-  addState(nextState) {
-    if (nextState) {
-      _.addItem(this.pendingStates, nextState)
-
-      if (this.isLocked()) {
-        this.emitUpdate()
-      }
-    }
-  },
-
-  /**
-   * 替换状态
-   * @param {any} nextState 
-   */
-  replaceState(nextState) {
-    let { pendingStates } = this
-
-    pendingStates.pop()
-
-    // push special params to point out should replace state
-    _.addItem(pendingStates, [nextState])
-  },
-
-  /**
-   * 获得状态
-   * 
-   * @returns 
-   */
-  getState() {
-    let { instance } = this
-    let { state, props } = instance
-
-    if (this.hasPendingState()) {
-      state = this.handlePendingStateQueue(state, props)
-
-      this.clearPendingStateQueue()
-    }
-
-    return state
-  },
-
-  hasPendingState() {
-    return this.pendingStates.length
-  },
-
-  handlePendingStateQueue(componentState, componentProps) {
-    let state = _.extend({}, componentState)
-
-    this.pendingStates.forEach(nextState => {
-      let isReplace = isReplaceState(nextState)
-
-      // 特殊处理 : 替换状态
-      if (isReplace) {
-        nextState = nextState[0]
-      }
-
-      if (_.isFn(nextState)) {
-        nextState = nextState.call(instance, state, componentProps)
-      }
-
-      // 特殊处理 : 替换状态
-      if (isReplace) {
-        state = _.extend({}, nextState)
-      } else {
-        _.extend(state, nextState)
-      }
-    })
-
-    return state
-  },
-
-  clearPendingStateQueue() {
-    this.pendingStates.length = 0
-  },
-
-
-
-  /**
-   * 
-   * 
-   */
-  clearCallbacks() {
-    let { pendingCallbacks, instance } = this
-    if (pendingCallbacks.length > 0) {
-      this.pendingCallbacks = []
-      pendingCallbacks.forEach(callback => callback.call(instance))
-    }
-  },
-
-  /**
-   * 
-   * 
-   * @param {any} callback 
-   */
-  addCallback(callback) {
-    if (_.isFn(callback)) {
-      _.addItem(this.pendingCallbacks, callback)
-    }
-  }
-}
-
-function isReplaceState(nextState) {
-  return _.isArr(nextState)
-}
-
-function shouldUpdate(component, nextProps, nextState, nextContext, callback) {
-  let shouldComponentUpdate = true
-  if (component.shouldComponentUpdate) {
-    shouldComponentUpdate = component.shouldComponentUpdate(nextProps, nextState, nextContext)
-  }
-  if (shouldComponentUpdate === false) {
-    component.props = nextProps
-    component.state = nextState
-    component.context = nextContext || {}
-    return
-  }
-  let cache = component.$cache
-  cache.props = nextProps
-  cache.state = nextState
-  cache.context = nextContext || {}
-  component.forceUpdate(callback)
-}
-
-
 
 /**
  * 组件
@@ -353,9 +74,9 @@ Component.prototype = {
   // },
 
   /**
+   * 强制更新
    * 
-   * 
-   * @param {any} callback 
+   * @param {Function} callback 
    * @returns 
    */
   forceUpdate(callback) {
@@ -397,18 +118,20 @@ Component.prototype = {
     if (callback) {
       callback.call(this)
     }
-    $updater.isPending = false
-    $updater.emitUpdate()
+
+    $updater.unlock()
+    $updater.tryUpdateComponent()
   },
 
   /**
+   * 设置状态
    * 
-   * 
-   * @param {any} nextState 
-   * @param {any} callback 
+   * @param {Function | Object} nextState 下一个状态
+   * @param {Function} [callback] 
    */
   setState(nextState, callback) {
     let { $updater } = this
+
     $updater.addCallback(callback)
     $updater.addState(nextState)
   },
@@ -421,6 +144,7 @@ Component.prototype = {
    */
   replaceState(nextState, callback) {
     let { $updater } = this
+
     $updater.addCallback(callback)
     $updater.replaceState(nextState)
   },
@@ -444,14 +168,14 @@ Component.prototype = {
   },
 
   /**
-   * 
+   * 锁定更新器
    */
   lockUpdater() {
     this.$updater.lock()
   },
 
   /**
-   * 
+   * 解锁更新器
    */
   unlockUpdater() {
     this.$updater.unlock()
@@ -460,6 +184,8 @@ Component.prototype = {
   tryEmitComponentWillMount() {
     if (this.componentWillMount) {
       this.componentWillMount()
+
+      // 获得最新的状态 ( 将还未处理的状态处理掉 , 获得最新的状态 )
       this.state = this.$updater.getState()
     }
   },
