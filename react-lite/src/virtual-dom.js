@@ -24,6 +24,7 @@ import {
  * DOM 节点的附加属性
  * vchildren {VNode[]} 存储该节点的所有子元素 ( 后序遍历树的结果 )
  * cache {Map<uid , Object>} 无状态组件 , 保存无状态组件渲染出来的虚拟接节点树 ; 
+ * eventStore {}
  */
 
 /**
@@ -151,12 +152,14 @@ function applyCreate(data) {
  */
 function destroyVnode(vnode, node) {
   let { vtype } = vnode
-  if (vtype === VELEMENT) { // destroy element
-    destroyVelem(vnode, node)
-  } else if (vtype === VCOMPONENT) { // destroy state component
-    destroyVcomponent(vnode, node)
-  } else if (vtype === VSTATELESS) { // destroy stateless component
-    destroyVstateless(vnode, node)
+  let destroyer
+
+  if (isVElement(vtype)) destroyer = destroyVelem
+  else if (isStateComponent(vtype)) destroyer = destroyVcomponent
+  else if (isStatelessComponent(vtype)) destroyer = destroyVstateless
+
+  if (destroyer) {
+    destroyer(vnode, node)
   }
 }
 
@@ -456,15 +459,23 @@ function updateVelem(velem, newVelem, node) {
   return node
 }
 
-function destroyVelem(velem, node) {
+/**
+ * 销毁虚拟元素节点
+ * @param {VNode} velem 虚拟元素节点
+ * @param {HtmlElement} node 节点
+ */
+let destroyVelem = (velem, node) => {
   let { props } = velem
   let { vchildren, childNodes } = node
+
   if (vchildren) {
     for (let i = 0, len = vchildren.length; i < len; i++) {
       destroyVnode(vchildren[i], childNodes[i])
     }
   }
+
   detachRef(velem.refs, velem.ref, node)
+
   node.eventStore = node.vchildren = null
 }
 
@@ -603,7 +614,7 @@ function createComponentInstance(Component, props, parentContext) {
  * @param {Object} parentContext 
  * @returns {VNode}
  */
-function renderComponent(component, parentContext) {
+let renderComponent = (component, parentContext) => {
   // 通过全局变量的方式 , 将组件的refs属性挂载到对应的VNode中
   refs = component.refs
 
@@ -627,9 +638,10 @@ function renderComponent(component, parentContext) {
  * @param {Object} parentContext 
  * @returns {Object}
  */
-function getChildContext(component, parentContext) {
+let getChildContext = (component, parentContext) => {
   if (component.getChildContext) {
     let curContext = component.getChildContext()
+
     if (curContext) {
       parentContext = _.extend(_.extend({}, parentContext), curContext)
     }
@@ -680,8 +692,22 @@ function destroyVcomponent(vcomponent, node) {
   cache.node = cache.parentContext = cache.vnode = component.refs = component.context = null
 }
 
-function compareTwoVnodes(vnode, newVnode, node, parentContext) {
+/**
+ * 比较两个虚拟节点 , 更新差异的地方
+ * @param {VNode} vnode 旧的虚拟节点
+ * @param {VNode} newVnode 新的虚拟节点
+ * @param {HtmlElement} node 旧的DOM树的根节点
+ * @param {Object} parentContext 传递给子节点的上下文 ( 包含父级,及其本级要传给子节点的上下文 )
+ */
+let compareTwoVnodes = (vnode, newVnode, node, parentContext) => {
   let newNode = node
+
+  /**
+   * 1. 节点被删除
+   *  
+   * 2. 节点被替换
+   * 3. 节点
+   */
   if (newVnode == null) {
     // remove
     destroyVnode(vnode, node)
@@ -695,6 +721,7 @@ function compareTwoVnodes(vnode, newVnode, node, parentContext) {
     // same type and same key -> update
     newNode = updateVnode(vnode, newVnode, node, parentContext)
   }
+
   return newNode
 }
 
@@ -754,12 +781,13 @@ function initComment(vnode) {
  */
 let pendingComponents = []
 
-let addPendingComponentQueue = component => {
-  _.addItem(pendingComponents, component)
-}
+let addPendingComponentQueue = component => _.addItem(pendingComponents, component)
 
 let clearPendingComponentQueue = () => pendingComponents = []
 
+/**
+ * 处理待更新的组件
+ */
 let clearPendingComponents = () => {
   let i = -1
   let len = pendingComponents.length
@@ -771,14 +799,18 @@ let clearPendingComponents = () => {
 
   clearPendingComponentQueue()
 
+  // 从子节点到父节点 , 依次更新
   while (len--) {
     let component = components[++i]
     let updater = component.$updater
-    
+
     if (component.componentDidMount) {
       component.componentDidMount()
     }
 
+    //
+    // 处理调用setState的导致的更新
+    //
     updater.unlock()
     updater.tryUpdateComponent()
   }

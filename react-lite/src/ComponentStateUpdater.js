@@ -28,18 +28,16 @@ const shouldUpdate = (component, nextProps, nextState, nextContext, callback) =>
     shouldComponentUpdate = component.shouldComponentUpdate(nextProps, nextState, nextContext)
   }
 
+  // 如果为false , 说明无需更新组件 ; 直接保存当前属性,状态,上下文即可
   if (shouldComponentUpdate === false) {
     component.props = nextProps
     component.state = nextState
     component.context = nextContext || {}
+
     return
   }
 
-  let cache = component.$cache
-  cache.props = nextProps
-  cache.state = nextState
-  cache.context = nextContext || {}
-
+  component.updateCacheState(nextProps, nextState, nextContext || {})
   component.forceUpdate(callback)
 }
 
@@ -113,6 +111,7 @@ Updater.prototype = {
    * @param {Object?} nextContext 新的上下文
    */
   tryUpdateComponent(nextProps, nextContext) {
+    // 将新的上下文和属性存储到实例中
     this.nextProps = nextProps
     this.nextContext = nextContext
 
@@ -132,14 +131,23 @@ Updater.prototype = {
   updateComponent() {
     let { instance, pendingStates, nextProps, nextContext } = this
 
-    if (nextProps || pendingStates.length > 0) {
+    // 更新条件 : 
+    // 1. 有新的属性
+    // 2. componentDidMount有setState
+    if (nextProps || this.hasPendingState()) {
       nextProps = nextProps || instance.props
       nextContext = nextContext || instance.context
 
+      // 清除中间值
       this.nextProps = this.nextContext = null
 
       // merge the nextProps and nextState and update by one time
-      shouldUpdate(instance, nextProps, this.getState(), nextContext, this.clearCallbacks)
+      shouldUpdate(
+        instance,
+        nextProps,
+        this.getState(),
+        nextContext,
+        this.clearCallbacks)
     }
   },
 
@@ -262,7 +270,8 @@ Updater.prototype = {
    * 锁定 -- 当addState时,不可以进行更新组件
    * 
    * 何时被锁定 : 
-   *  1. 初始化组件时
+   *  1. 初始化组件时 , 避免不必要的更新
+   *  2. 
    */
   lock() {
     this.isPending = true

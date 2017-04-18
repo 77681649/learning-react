@@ -14,6 +14,9 @@ import * as Updater from './ComponentStateUpdater'
  * @typedef {Object}
  * @property {Boolean} [isMounted=false] 组件是否已经mount
  * @property {Object} [parentContext] 父级的上下文
+ * @property {Object} props 待渲染的最新属性
+ * @property {Object} state 待渲染的最新状态
+ * @property {Object} context 待渲染的最新上下文
  */
 
 /**
@@ -81,37 +84,56 @@ Component.prototype = {
    */
   forceUpdate(callback) {
     let { $updater, $cache, props, state, context } = this
+    
     if (!$cache.isMounted) {
       return
     }
+    
     // if updater is pending, add state to trigger nexttick update
-    if ($updater.isPending) {
+    if ($updater.isLocked()) {
       $updater.addState(state)
-      return;
+      return
     }
+
     let nextProps = $cache.props || props
     let nextState = $cache.state || state
     let nextContext = $cache.context || context
     let parentContext = $cache.parentContext
     let node = $cache.node
     let vnode = $cache.vnode
+
+    // 释放缓存
     $cache.props = $cache.state = $cache.context = null
-    $updater.isPending = true
+    
+    // lock , componentWillUpdate中的setState将不会立即执行
+    $updater.lock()
+    
     if (this.componentWillUpdate) {
       this.componentWillUpdate(nextProps, nextState, nextContext)
     }
+
+    // 更新组件状态
     this.state = nextState
     this.props = nextProps
     this.context = nextContext
+
     let newVnode = renderComponent(this)
+
+    // 差异比较 , 获得最新的节点
     let newNode = compareTwoVnodes(vnode, newVnode, node, getChildContext(this, parentContext))
+    
     if (newNode !== node) {
       newNode.cache = newNode.cache || {}
       syncCache(newNode.cache, node.cache, newNode)
     }
-    $cache.vnode = newVnode
-    $cache.node = newNode
+
+    // 更新虚拟节点和节点
+    this.updateNodeInfo(newVnode , newNode)
+
+    // 更新refs
+    // 以及待处理的更新的组件
     clearPending()
+    
     if (this.componentDidUpdate) {
       this.componentDidUpdate(props, state, context)
     }
@@ -186,12 +208,17 @@ Component.prototype = {
       this.componentWillMount()
 
       // 获得最新的状态 ( 将还未处理的状态处理掉 , 获得最新的状态 )
+      // 保证render方法能获得最新的state
       this.state = this.$updater.getState()
     }
   },
 
   setCache(cache) {
     _.extend(this.$cache, cache)
+  },
+
+  updateCacheState(props, state, conext) {
+    this.setCache({ props, state, conext })
   },
 
   updateNodeInfo(vnode, node) {

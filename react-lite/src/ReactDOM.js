@@ -73,6 +73,8 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
   
   updateQueue.lock()
   
+  // 处理refs
+  // 处理待更新的组件
   clearPending()
   
   argsCache = pendingRendering[id]
