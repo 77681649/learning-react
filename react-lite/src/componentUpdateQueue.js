@@ -1,11 +1,7 @@
 /**
  * 组件更新队列
  */
-
-/**
- * 组件更新队列
- */
-export default let updateQueue = {
+export default {
 
   /**
    * 待更新器队列

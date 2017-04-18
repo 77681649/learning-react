@@ -8,7 +8,7 @@ import {
   DOCUMENT_FRAGMENT_NODE_TYPE
 } from './constant'
 import { initVnode, destroyVnode, clearPending, compareTwoVnodes } from './virtual-dom'
-import { updateQueue } from './Component'
+import { updateQueue } from './componentUpdateQueue'
 
 function isValidContainer(node) {
   return !!(node && (
@@ -66,16 +66,18 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
 
   lockContainer(id)
 
+  // 创建DOM树 , 返回根节点
   let rootNode = renderDOMTreeToContainer(id, vnode, container, parentContext)
 
-  let isPending = updateQueue.isPending
-  updateQueue.isPending = true
+  let unlocked = !updateQueue.isLocked()
+  
+  updateQueue.lock()
+  
   clearPending()
+  
   argsCache = pendingRendering[id]
 
   unlockContainer(id)
-
-
 
   let result = null
 
@@ -91,8 +93,8 @@ function renderTreeIntoContainer(vnode, container, callback, parentContext) {
     result = rootNode.cache[vnode.uid]
   }
 
-  if (!isPending) {
-    updateQueue.isPending = false
+  if (unlocked) {
+    updateQueue.unlock()
     updateQueue.batchUpdate()
   }
 

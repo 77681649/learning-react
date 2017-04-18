@@ -260,6 +260,9 @@ Updater.prototype = {
 
   /**
    * 锁定 -- 当addState时,不可以进行更新组件
+   * 
+   * 何时被锁定 : 
+   *  1. 初始化组件时
    */
   lock() {
     this.isPending = true
@@ -271,8 +274,6 @@ Updater.prototype = {
   unlock() {
     this.isPending = false
   },
-
-
 
   /**
    * 添加回调函数

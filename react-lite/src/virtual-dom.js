@@ -200,12 +200,16 @@ function initVelem(velem, parentContext, namespaceURI) {
     _.setProps(rootNode, props, isCustomComponent)
   }
 
+  // 创建跟节点
   let rootNode = createElement(velem)
 
+  // 遍历构造所有子节点
   initVchildren(velem, rootNode, parentContext)
 
+  // 设置根节点的数据
   setPropsForRootNode()
 
+  // 记录虚拟节点和节点之间的关系
   if (velem.ref != null) {
     enqueuePendingsRefs(velem, rootNode)
   }
@@ -482,7 +486,7 @@ function initVstateless(vstateless, parentContext, namespaceURI) {
   let vnode = renderVstateless(vstateless, parentContext)
   let node = initVnode(vnode, parentContext, namespaceURI)
 
-  addCache(node, vnode, vstateless.uid)
+  addVNodeToNodeAttribute(node, vstateless.uid, vnode)
 
   return node
 }
@@ -556,21 +560,23 @@ function initVcomponent(vcomponent, parentContext, namespaceURI) {
   let vnode, node
 
   component.lockUpdater()
-
   component.tryEmitComponentWillMount()
 
   vnode = renderComponent(component)
 
   node = initVnode(vnode, getChildContext(component, parentContext), namespaceURI)
 
-  addCache(component, node, uid)
+  addVNodeToNodeAttribute(node, uid, component)
 
   component.updateNodeInfo(vnode, node)
+
+  // mounted 阶段完成
   component.updateMountedState(true)
 
+  // 将组件添加到待处理队列
   addPendingComponentQueue(component)
 
-  // 记录 refs
+  // 记录虚拟节点和节点之间的关系
   if (vcomponent.ref != null) {
     enqueuePendingsRefs(vcomponent, component)
   }
@@ -619,7 +625,7 @@ function renderComponent(component, parentContext) {
  * 
  * @param {Object} component 
  * @param {Object} parentContext 
- * @returns 
+ * @returns {Object}
  */
 function getChildContext(component, parentContext) {
   if (component.getChildContext) {
@@ -653,7 +659,7 @@ function updateVcomponent(vcomponent, newVcomponent, node, parentContext) {
     attachRef(newVcomponent.refs, newVcomponent.ref, component)
   }
 
-  updater.emitUpdate(nextProps, componentContext)
+  updater.tryUpdateComponent(nextProps, componentContext)
 
   return cache.node
 }
@@ -672,44 +678,6 @@ function destroyVcomponent(vcomponent, node) {
   delete component.setState
   cache.isMounted = false
   cache.node = cache.parentContext = cache.vnode = component.refs = component.context = null
-}
-
-/**
- * 
- */
-let pendingComponents = []
-
-function addPendingComponentQueue(component) {
-  _.addItem(pendingComponents, component)
-}
-
-function clearPendingComponents() {
-  let len = pendingComponents.length
-  if (!len) {
-    return
-  }
-  let components = pendingComponents
-  pendingComponents = []
-  let i = -1
-  while (len--) {
-    let component = components[++i]
-    let updater = component.$updater
-    if (component.componentDidMount) {
-      component.componentDidMount()
-    }
-    updater.isPending = false
-    updater.emitUpdate()
-  }
-}
-
-
-
-/**
- * 
- */
-function clearPending() {
-  clearPendingRefs()
-  clearPendingComponents()
 }
 
 function compareTwoVnodes(vnode, newVnode, node, parentContext) {
@@ -734,8 +702,6 @@ function getDOMNode() {
   return this
 }
 
-
-
 function syncCache(cache, oldCache, node) {
   for (let key in oldCache) {
     if (!oldCache.hasOwnProperty(key)) {
@@ -757,11 +723,18 @@ function syncCache(cache, oldCache, node) {
  * @param {any} node 
  * @param {any} key 
  */
-function addCache(cache, node, key) {
+function addVNodeToNodeAttribute(node, key, cache) {
   node.cache = node.cache || {}
   node.cache[key] = cache
 }
 
+/**
+ * 消化掉等待的处理的任务
+ */
+function clearPending() {
+  clearPendingRefs()
+  clearPendingComponents()
+}
 
 //
 // ------------------------------------------------ COMMENT
@@ -770,6 +743,46 @@ function initComment(vnode) {
   return document.createComment(`react-text: ${vnode.uid || _.getUid()}`)
 }
 
+
+
+
+//
+// ------------------------------------------------ PENDING COMPONENT
+//
+/**
+ * 
+ */
+let pendingComponents = []
+
+let addPendingComponentQueue = component => {
+  _.addItem(pendingComponents, component)
+}
+
+let clearPendingComponentQueue = () => pendingComponents = []
+
+let clearPendingComponents = () => {
+  let i = -1
+  let len = pendingComponents.length
+  let components = pendingComponents
+
+  if (len < 0) {
+    return
+  }
+
+  clearPendingComponentQueue()
+
+  while (len--) {
+    let component = components[++i]
+    let updater = component.$updater
+    
+    if (component.componentDidMount) {
+      component.componentDidMount()
+    }
+
+    updater.unlock()
+    updater.tryUpdateComponent()
+  }
+}
 
 
 
@@ -784,46 +797,59 @@ let pendingRefs = []
 
 /**
  * 
- * ( 组件特有 )
- * 
- * 
+ * 将虚拟节点和节点之间的关系添加到待处理等待 , 等到适当的时机再进行处理 ( mounted之后 , s)
  * 
  * @param {VNode} vnode 
  * @param {HtmlElement} node 
  */
-function enqueuePendingsRefs(vnode, node) {
+let enqueuePendingsRefs = (vnode, node) => {
   _.addItem(pendingRefs, vnode)
   _.addItem(pendingRefs, node)
 }
 
+let clearPendingRefsQueue = () => {
+  pendingRefs = []
+}
+
 /**
- * 
+ * 消化掉待处理的refs
  */
-function clearPendingRefs() {
+let clearPendingRefs = () => {
+  let list, vnode, refValue
   let len = pendingRefs.length
 
-  if (!len) {
+  if (len < 0) {
     return
   }
 
-  let list = pendingRefs
-  pendingRefs = []
-  
+  list = pendingRefs
+
   for (let i = 0; i < len; i += 2) {
-    let vnode = list[i]
-    let refValue = list[i + 1]
+    vnode = list[i]
+    refValue = list[i + 1]
+
     attachRef(vnode.refs, vnode.ref, refValue)
   }
+
+  clearPendingRefsQueue()
 }
 
-function attachRef(refs, refKey, refValue) {
+/**
+ * 
+ * @param {Object} refs 
+ * @param {Any} refKey 
+ * @param {Any} refValue 
+ */
+let attachRef = (refs, refKey, refValue) => {
   if (refKey == null || !refValue) {
     return
   }
+
   if (refValue.nodeName && !refValue.getDOMNode) {
     // support react v0.13 style: this.refs.myInput.getDOMNode()
     refValue.getDOMNode = getDOMNode
   }
+
   if (_.isFn(refKey)) {
     refKey(refValue)
   } else if (refs) {
@@ -831,10 +857,18 @@ function attachRef(refs, refKey, refValue) {
   }
 }
 
-function detachRef(refs, refKey, refValue) {
+/**
+ * 
+ * 
+ * @param {any} refs 
+ * @param {any} refKey 
+ * @param {any} refValue 
+ */
+let detachRef = (refs, refKey, refValue) => {
   if (refKey == null) {
     return
   }
+
   if (_.isFn(refKey)) {
     refKey(null)
   } else if (refs && refs[refKey] === refValue) {
