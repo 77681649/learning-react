@@ -147,10 +147,13 @@ function applyCreate(data) {
 
 
 /**
+ * 销毁虚拟节点 ( 以及其下的所有子节点 )
  * Only vnode which has props.children need to call destroy function
  * to check whether subTree has component that need to call lify-cycle method and release cache.
+ * @param {VNode} vnode 虚拟节点
+ * @param {Element} node 虚拟节点对应的DOM节点
  */
-function destroyVnode(vnode, node) {
+let destroyVnode = (vnode, node) => {
   let { vtype } = vnode
   let destroyer
 
@@ -279,6 +282,7 @@ function collectChild(child, children) {
  * 
  * @param {VNode} rootNode 
  * @param {Function} iterate 
+ * @Param {VNode []}
  */
 function treePostOrder(rootNode, iterate, nodes) {
   _.isArr(rootNode)
@@ -702,24 +706,40 @@ function destroyVcomponent(vcomponent, node) {
 let compareTwoVnodes = (vnode, newVnode, node, parentContext) => {
   let newNode = node
 
+  let remove = () => {
+    destroyVnode(vnode, node)
+
+    node.parentNode.removeChild(node)
+  }
+
+  let replace = () => {
+    destroyVnode(vnode, node)
+    newNode = initVnode(newVnode, parentContext, node.namespaceURI)
+
+    node.parentNode.replaceChild(newNode, node)
+  }
+
+  let update = () => {
+    newNode = updateVnode(vnode, newVnode, node, parentContext)
+  }
+
   /**
-   * 1. 节点被删除
+   * 1. 删除节点
+   * 
    *  
-   * 2. 节点被替换
-   * 3. 节点
+   * 2. 替换节点
+   * 
+   * 3. 更新节点
    */
   if (newVnode == null) {
     // remove
-    destroyVnode(vnode, node)
-    node.parentNode.removeChild(node)
+    remove()
   } else if (vnode.type !== newVnode.type || vnode.key !== newVnode.key) {
     // replace
-    destroyVnode(vnode, node)
-    newNode = initVnode(newVnode, parentContext, node.namespaceURI)
-    node.parentNode.replaceChild(newNode, node)
+    replace()
   } else if (vnode !== newVnode || parentContext) {
     // same type and same key -> update
-    newNode = updateVnode(vnode, newVnode, node, parentContext)
+    update()
   }
 
   return newNode
