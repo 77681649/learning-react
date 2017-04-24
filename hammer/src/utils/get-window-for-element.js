@@ -6,6 +6,5 @@
  */
 export default function getWindowForElement(element) {
   let doc = element.ownerDocument || element;
-  
   return (doc.defaultView || doc.parentWindow || window);
 }

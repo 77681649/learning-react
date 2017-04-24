@@ -2,9 +2,19 @@ import { now,round } from '../utils/utils-consts';
 import getCenter from './get-center';
 
 /**
+ * @typedef {Object} CloneInputData
+ * @property {Number} timeStamp 时间戳
+ * @property {Array} pointers 各点的位置
+ * @property {Point} center 重心坐标
+ * @property {Number} deltaX
+ * @property {Number} deltaY
+ */
+
+
+/**
  * @private
  * create a simple clone from the input used for storage of firstInput and firstMultiple
- * @param {Object} input
+ * @param {InputData} input
  * @returns {Object} clonedInputData
  */
 export default function simpleCloneInputData(input) {
