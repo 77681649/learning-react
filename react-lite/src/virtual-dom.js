@@ -22,7 +22,7 @@ import {
 
 /**
  * DOM 节点的附加属性
- * vchildren {VNode[]} 存储该节点的所有子元素 ( 后序遍历树的结果 )
+ * vchildren {VNode[]} 存储该节点的子节点
  * cache {Map<uid , Object>} 无状态组件 , 保存无状态组件渲染出来的虚拟接节点树 ; 
  * eventStore {}
  */
