@@ -1,0 +1,81 @@
+<!DOCUTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <style>
+    .block {
+      display: flex;
+      -webkit-box-pack: center;
+      justify-content: center;
+
+      -webkit-box-align: center;
+      align-items: center;
+    }
+    
+    .big {
+      width: 300px;
+      height: 300px;
+    }
+    
+    .normal {
+      width: 200px;
+      height: 200px;
+    }
+    
+    .small {
+      width: 100px;
+      height: 100px;
+    }
+    
+    .red {
+      background: red;
+    }
+    
+    .blue {
+      background: blue;
+    }
+    
+    .green {
+      background: green;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="block" class="block big red" sty>
+    <div class="block normal blue">
+      <div class="block small green"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        const $ = selector => document.querySelectorAll(selector)
+
+        const block = $('#block')[0]
+
+        block.addEventListener('touchstart', e => {
+          console.log('start', e)
+        })
+
+        block.addEventListener('touchmove', e => {
+          console.log('move', e)
+        })
+
+        block.addEventListener('touchend', e => {
+          console.log('end', e)
+        })
+
+        block.addEventListener('touchcancel', e => {
+          console.log('cancel', e)
+        })
+      },
+      false)
+  </script>
+</body>
+
+</html>
