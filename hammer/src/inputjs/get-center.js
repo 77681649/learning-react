@@ -2,6 +2,11 @@ import { round } from '../utils/utils-consts';
 
 /**
  * 获得所有点的中心点坐标
+ * 
+ * 重心公式 : 
+ * x = (x1 + x2 + x3 + ... ) / count
+ * y = (y1 + y2 + y3 + ... ) / count
+ * 
  * @private
  * get the center of all the pointers
  * @param {Pointer[]} pointers
@@ -12,11 +17,11 @@ export default function getCenter(pointers) {
   let onlyPointer = pointersLength === 1
 
   return onlyPointer
-    ? getCenterForSingle(pointers)
-    : getCenterForMulti(pointers, pointersLength)
+    ? getCenterForSinglePotiner(pointers)
+    : getCenterForMultiplePotiner(pointers, pointersLength)
 }
 
-function getCenterForSingle(pointers) {
+function getCenterForSinglePotiner(pointers) {
   let pointer = pointers[0]
 
   return {
@@ -25,7 +30,7 @@ function getCenterForSingle(pointers) {
   }
 }
 
-function getCenterForMulti(pointers, pointersLength) {
+function getCenterForMultiplePotiner(pointers, pointersLength) {
   let x = 0;
   let y = 0;
 

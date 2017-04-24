@@ -42,10 +42,10 @@ export default function computeInputData(manager, input) {
   let offsetCenter = firstMultiple ? firstMultiple.center : firstInput.center;
   let center = input.center = getCenter(pointers);
 
-  // 方位角
+  // 两点之间的方位角
   input.angle = getAngle(offsetCenter, center);
 
-  // 与开始点的距离
+  // 两点之间的距离
   input.distance = getDistance(offsetCenter, center);
 
   computeDeltaXY(session, input);

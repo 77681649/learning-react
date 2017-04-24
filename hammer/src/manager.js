@@ -23,9 +23,9 @@ const FORCED_STOP = 2;
  * @typedef {Object} ManagerSession
  * @property {CloneInputData} firstInput 存储第一次输入的相关参数 ( 用于计算角度和距离 )
  * @property {CloneInputData | Boolean} firstMultiple 当有多个点时 , 存储第一次输入的相关参数 ; 如果只有一个点 , 则为false (用于计算角度 , 距离 , 缩放比例 )
- * @property {InputData} prevInput
- * @property {Point} offsetDelta
- * @property {Point} prevDelta
+ * @property {InputData} prevInput 前一次输入的数据
+ * @property {Point} prevDelta 前一次的移动增量
+ * @property {Point} offsetDelta 
  * @property {Boolean} stopped
  * @property {Recognizer} curRecognizer
  */
