@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width, user-scalable=no">
+  <title></title>
+</head>
+
+<body>
+  <div id="block" style="margin-top:2000px;background:red;width:200px;height:200px;">&nbsp;</div>
+  <script src="../../hammer.js"></script>
+  <script>
+    var manager = new Hammer(document.querySelector('#block'));
+
+    manager.on('tap', function (ev) {
+      console.log(ev)
+    })
+
+    console.log(document.body.style.touchAction)
+  </script>
+</body>
+
+</html>
