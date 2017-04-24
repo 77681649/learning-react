@@ -1,5 +1,11 @@
 import { abs } from '../utils/utils-consts';
-import { DIRECTION_NONE,DIRECTION_LEFT,DIRECTION_RIGHT,DIRECTION_UP,DIRECTION_DOWN } from './input-consts';
+import {
+  DIRECTION_NONE,
+  DIRECTION_LEFT,
+  DIRECTION_RIGHT,
+  DIRECTION_UP,
+  DIRECTION_DOWN
+} from './input-consts';
 
 /**
  * 
@@ -18,6 +24,8 @@ export default function getDirection(x, y) {
   if (abs(x) >= abs(y)) {
     return x < 0 ? DIRECTION_LEFT : DIRECTION_RIGHT;
   }
-  
+
+  // 往上越来越小
+  // 往下越来越大
   return y < 0 ? DIRECTION_UP : DIRECTION_DOWN;
 }

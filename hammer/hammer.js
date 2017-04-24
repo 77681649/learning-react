@@ -1,4 +1,4 @@
-/*! Hammer.JS - v2.0.8 - 2017-04-24
+/*! Hammer.JS - v2.0.8 - 2017-04-25
  * http://hammerjs.github.io/
  *
  * Copyright (c)  Jorik Tangelder;
@@ -207,6 +207,22 @@ function invokeArrayArg(arg, fn, context) {
   return false;
 }
 
+var indexOf = function indexOf(arr, find, findByKey) {
+  var predicate = findByKey ? function (it) {
+    return findByKey(it) === find;
+  } : function (it) {
+    return it === find;
+  };
+
+  for (var i = 0, len = arr.length; i < len; i++) {
+    if (predicate(src[i])) {
+      return i;
+    }
+  }
+
+  return -1;
+};
+
 /**
  * @private
  * find if a array contains the object using indexOf or a simple polyFill
@@ -216,19 +232,23 @@ function invokeArrayArg(arg, fn, context) {
  * @return {Boolean|Number} false when not found, or the index
  */
 function inArray(src, find, findByKey) {
-  if (src.indexOf && !findByKey) {
-    return src.indexOf(find);
-  } else {
-    var i = 0;
-    while (i < src.length) {
-      if (findByKey && src[i][findByKey] == find || !findByKey && src[i] === find) {
-        // do not use === here, test fails
-        return i;
-      }
-      i++;
-    }
-    return -1;
-  }
+  return src.indexOf && !findByKey ? src.indexOf(find) : indexOf(src, find, findByKey);
+  // if (src.indexOf && !findByKey) {
+  //   return src.indexOf(find);
+  // } else {
+  //   let i = 0;
+
+  //   while (i < src.length) {
+  //     if ((findByKey && src[i][findByKey] == find) ||
+  //       (!findByKey && src[i] === find)) {// do not use === here, test fails
+  //       return i;
+  //     }
+
+  //     i++;
+  //   }
+
+  //   return -1;
+  // }
 }
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
@@ -1139,12 +1159,16 @@ function setTimeoutContext(fn, timeout, context) {
 }
 
 /**
+ * 计算两个点之间的距离
+ * 
+ * 两点之间的距离 = sqrt( (x1 - x2) ^ 2 + ( y1 - y2 ) ^ 2 )
+ * 
  * @private
  * calculate the absolute distance between two points
  * @param {Object} p1 {x, y}
  * @param {Object} p2 {x, y}
  * @param {Array} [props] containing x and y keys
- * @return {Number} distance
+ * @return {Number} distance 返回到原点的距离
  */
 function getDistance(p1, p2, props) {
   if (!props) {
@@ -1566,29 +1590,40 @@ function hasParent(node, parent) {
 }
 
 /**
+ * 获得所有点的中心点坐标
+ * 
+ * 重心公式 : 
+ * x = (x1 + x2 + x3 + ... ) / count
+ * y = (y1 + y2 + y3 + ... ) / count
+ * 
  * @private
  * get the center of all the pointers
- * @param {Array} pointers
- * @return {Object} center contains `x` and `y` properties
+ * @param {Pointer[]} pointers
+ * @return {Point} center contains `x` and `y` properties
  */
 function getCenter(pointers) {
   var pointersLength = pointers.length;
+  var onlyPointer = pointersLength === 1;
 
-  // no need to loop when only one touch
-  if (pointersLength === 1) {
-    return {
-      x: round(pointers[0].clientX),
-      y: round(pointers[0].clientY)
-    };
-  }
+  return onlyPointer ? getCenterForSinglePotiner(pointers) : getCenterForMultiplePotiner(pointers, pointersLength);
+}
 
+function getCenterForSinglePotiner(pointers) {
+  var pointer = pointers[0];
+
+  return {
+    x: round(pointer.clientX),
+    y: round(pointer.clientY)
+  };
+}
+
+function getCenterForMultiplePotiner(pointers, pointersLength) {
   var x = 0;
   var y = 0;
-  var i = 0;
-  while (i < pointersLength) {
+
+  for (var i = 0; i < pointersLength; i++) {
     x += pointers[i].clientX;
     y += pointers[i].clientY;
-    i++;
   }
 
   return {
@@ -1598,9 +1633,18 @@ function getCenter(pointers) {
 }
 
 /**
+ * @typedef {Object} CloneInputData
+ * @property {Number} timeStamp 时间戳
+ * @property {Array} pointers 各点的位置
+ * @property {Point} center 重心坐标
+ * @property {Number} deltaX
+ * @property {Number} deltaY
+ */
+
+/**
  * @private
  * create a simple clone from the input used for storage of firstInput and firstMultiple
- * @param {InputDat} input
+ * @param {InputData} input
  * @returns {Object} clonedInputData
  */
 function simpleCloneInputData(input) {
@@ -1626,23 +1670,33 @@ function simpleCloneInputData(input) {
 }
 
 /**
+ * 计算两个点的之间的方位角 ( 两个点之间的中位点 )
+ * 
+ * 
+ * Math.atan2( y , x ) 返回原点至点(x,y)的方位角 ( 单位 : 弧度 )
+ * 
+ * 方位角角度 = atan2( (y2 - y1) , (x2 - x1) ) * 180 / PI
+ * 
  * @private
  * calculate the angle between two coordinates
  * @param {Object} p1
  * @param {Object} p2
  * @param {Array} [props] containing x and y keys
- * @return {Number} angle
+ * @return {Number} angle 返回两个坐标之间的角度
  */
 function getAngle(p1, p2, props) {
   if (!props) {
     props = PROPS_XY;
   }
+
   var x = p2[props[0]] - p1[props[0]];
   var y = p2[props[1]] - p1[props[1]];
+
   return Math.atan2(y, x) * 180 / Math.PI;
 }
 
 /**
+ * 
  * @private
  * get the direction between two points
  * @param {Number} x
@@ -1654,12 +1708,20 @@ function getDirection(x, y) {
     return DIRECTION_NONE;
   }
 
+  // 优先水平方向
   if (abs(x) >= abs(y)) {
     return x < 0 ? DIRECTION_LEFT : DIRECTION_RIGHT;
   }
+
   return y < 0 ? DIRECTION_UP : DIRECTION_DOWN;
 }
 
+/**
+ * 计算移动增量
+ * @param {ManagerSession} session 
+ * @param {InputData} input 
+ * @returns {Point} 返回动作的相对于起始点的移动增量
+ */
 function computeDeltaXY(session, input) {
   var center = input.center;
   // let { offsetDelta:offset = {}, prevDelta = {}, prevInput = {} } = session;
@@ -1681,6 +1743,14 @@ function computeDeltaXY(session, input) {
     };
   }
 
+  console.log(center.y, offset.y);
+  /**
+   * prevDelta 坐标原点
+   * offset 起始点
+   * center 目标点
+   * 
+   * 移动位置 = center - offset + prevDelta ( 修复多动作的情况下 , 坐标原点非(0,0)的情况 )
+   */
   input.deltaX = prevDelta.x + (center.x - offset.x);
   input.deltaY = prevDelta.y + (center.y - offset.y);
 }
@@ -1790,15 +1860,21 @@ function computeInputData(manager, input) {
       firstMultiple = session.firstMultiple;
 
   var offsetCenter = firstMultiple ? firstMultiple.center : firstInput.center;
-
   var center = input.center = getCenter(pointers);
+
   input.timeStamp = now();
   input.deltaTime = input.timeStamp - firstInput.timeStamp;
 
+  // 两点之间的方位角
   input.angle = getAngle(offsetCenter, center);
+
+  // 两点之间的距离
   input.distance = getDistance(offsetCenter, center);
 
+  // 计算移动增量
   computeDeltaXY(session, input);
+
+  // 移动方向
   input.offsetDirection = getDirection(input.deltaX, input.deltaY);
 
   var overallVelocity = getVelocity(input.deltaTime, input.deltaX, input.deltaY);
@@ -1807,6 +1883,7 @@ function computeInputData(manager, input) {
   input.overallVelocity = abs(overallVelocity.x) > abs(overallVelocity.y) ? overallVelocity.x : overallVelocity.y;
 
   input.scale = firstMultiple ? getScale(firstMultiple.pointers, pointers) : 1;
+
   input.rotation = firstMultiple ? getRotation(firstMultiple.pointers, pointers) : 0;
 
   input.maxPointers = !session.prevInput ? input.pointers.length : input.pointers.length > session.prevInput.maxPointers ? input.pointers.length : session.prevInput.maxPointers;
@@ -1921,6 +1998,7 @@ function removeEventListeners(target, types, handler) {
  */
 function getWindowForElement(element) {
   var doc = element.ownerDocument || element;
+
   return doc.defaultView || doc.parentWindow || window;
 }
 
@@ -2109,36 +2187,45 @@ function toArray$1(obj) {
   return Array.prototype.slice.call(obj, 0);
 }
 
+var distinct = function distinct(arr, key) {
+  var results = [],
+      values = [];
+
+  for (var i = 0, len = arr.length; i < len; i++) {
+    var item = arr[i];
+    var val = key ? item[key] : item;
+
+    if (inArray(values, val) < 0) {
+      results.push(item);
+    }
+
+    values[i] = val;
+  }
+
+  return results;
+};
+
+var sort = function sort(arr, key) {
+  var predicate = key ? function (a, b) {
+    return a[key] > b[key];
+  } : undefined;
+
+  return arr.sort(predicate);
+};
+
 /**
  * @private
  * unique array with objects based on a key (like 'id') or just by the array's value
  * @param {Array} src [{id:1},{id:2},{id:1}]
  * @param {String} [key]
- * @param {Boolean} [sort=False]
+ * @param {Boolean} [shouldSort=False]
  * @returns {Array} [{id:1},{id:2}]
  */
-function uniqueArray(src, key, sort) {
-  var results = [];
-  var values = [];
-  var i = 0;
+function uniqueArray(src, key, shouldSort) {
+  var results = distinct(src, key);
 
-  while (i < src.length) {
-    var val = key ? src[i][key] : src[i];
-    if (inArray(values, val) < 0) {
-      results.push(src[i]);
-    }
-    values[i] = val;
-    i++;
-  }
-
-  if (sort) {
-    if (!key) {
-      results = results.sort();
-    } else {
-      results = results.sort(function (a, b) {
-        return a[key] > b[key];
-      });
-    }
+  if (shouldSort) {
+    results = sort(results, key);
   }
 
   return results;
@@ -2172,6 +2259,8 @@ var TouchInput = function (_Input) {
     var _this = possibleConstructorReturn(this, (TouchInput.__proto__ || Object.getPrototypeOf(TouchInput)).apply(this, arguments));
 
     _this.evTarget = TOUCH_TARGET_EVENTS;
+
+    // 存储目标元素上触点的id ( 用于在每次touch时  , 获得对应的changeTouches )
     _this.targetIds = {};
     return _this;
   }
@@ -2494,8 +2583,8 @@ function createInputInstance(manager) {
 
   if (inputClass) {
     Type = inputClass;
-  } else if (SUPPORT_POINTER_EVENTS) {
-    Type = PointerEventInput;
+    // } else if (SUPPORT_POINTER_EVENTS) {
+    //   Type = PointerEventInput;
   } else if (SUPPORT_ONLY_TOUCH) {
     Type = TouchInput;
   } else if (!SUPPORT_TOUCH) {
@@ -2511,9 +2600,13 @@ var FORCED_STOP = 2;
 
 /**
  * @typedef {Object} ManagerSession
- * @property {InputData} prevInput
- * @property {} firstInput
- * @property {} firstMultiple
+ * @property {CloneInputData} firstInput 存储第一次输入的相关参数 ( 用于计算角度和距离 )
+ * @property {CloneInputData | Boolean} firstMultiple 当有多个点时 , 存储第一次输入的相关参数 ; 如果只有一个点 , 则为false (用于计算角度 , 距离 , 缩放比例 )
+ * @property {InputData} prevInput 前一次输入的数据
+ * @property {Point} prevDelta 前一次的偏移增量 ( 作为动作开始时的原点坐标 )
+ * @property {Point} offsetDelta 第一次接触屏幕的点的clientX与clientY ( 作为基准点 )
+ * @property {Boolean} stopped 
+ * @property {Recognizer} curRecognizer
  */
 
 /**
@@ -2840,6 +2933,11 @@ var Manager = function () {
       this.session = {};
       this.input.destroy();
       this.element = null;
+    }
+  }, {
+    key: 'getElement',
+    value: function getElement() {
+      return this.element;
     }
   }, {
     key: 'isEnabled',

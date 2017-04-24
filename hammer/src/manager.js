@@ -24,9 +24,9 @@ const FORCED_STOP = 2;
  * @property {CloneInputData} firstInput 存储第一次输入的相关参数 ( 用于计算角度和距离 )
  * @property {CloneInputData | Boolean} firstMultiple 当有多个点时 , 存储第一次输入的相关参数 ; 如果只有一个点 , 则为false (用于计算角度 , 距离 , 缩放比例 )
  * @property {InputData} prevInput 前一次输入的数据
- * @property {Point} prevDelta 前一次的移动增量
- * @property {Point} offsetDelta 
- * @property {Boolean} stopped
+ * @property {Point} prevDelta 前一次的偏移增量 ( 作为动作开始时的原点坐标 )
+ * @property {Point} offsetDelta 第一次接触屏幕的点的clientX与clientY ( 作为基准点 )
+ * @property {Boolean} stopped 
  * @property {Recognizer} curRecognizer
  */
 
@@ -310,6 +310,10 @@ export default class Manager {
     this.session = {};
     this.input.destroy();
     this.element = null;
+  }
+
+  getElement() {
+    return this.element
   }
 
   isEnabled() {

@@ -18,8 +18,8 @@ export default function createInputInstance(manager) {
   let { options:{ inputClass } } = manager;
   if (inputClass) {
     Type = inputClass;
-  } else if (SUPPORT_POINTER_EVENTS) {
-    Type = PointerEventInput;
+  // } else if (SUPPORT_POINTER_EVENTS) {
+  //   Type = PointerEventInput;
   } else if (SUPPORT_ONLY_TOUCH) {
     Type = TouchInput;
   } else if (!SUPPORT_TOUCH) {

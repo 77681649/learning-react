@@ -1,4 +1,5 @@
 /**
+ * 计算移动到x,y的速度 ( 单位 px/ms )
  * @private
  * calculate the velocity between two points. unit is in px per ms.
  * @param {Number} deltaTime

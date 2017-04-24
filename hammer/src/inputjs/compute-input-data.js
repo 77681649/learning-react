@@ -35,12 +35,12 @@ export default function computeInputData(manager, input) {
     session.firstMultiple = false;
   }
 
-  input.timeStamp = now();
-  input.deltaTime = input.timeStamp - firstInput.timeStamp;
-
   let { firstInput, firstMultiple } = session;
   let offsetCenter = firstMultiple ? firstMultiple.center : firstInput.center;
   let center = input.center = getCenter(pointers);
+
+  input.timeStamp = now();
+  input.deltaTime = input.timeStamp - firstInput.timeStamp;
 
   // 两点之间的方位角
   input.angle = getAngle(offsetCenter, center);
@@ -48,8 +48,10 @@ export default function computeInputData(manager, input) {
   // 两点之间的距离
   input.distance = getDistance(offsetCenter, center);
 
+  // 计算移动增量
   computeDeltaXY(session, input);
 
+  // 移动方向
   input.offsetDirection = getDirection(input.deltaX, input.deltaY);
 
   let overallVelocity = getVelocity(input.deltaTime, input.deltaX, input.deltaY);
@@ -58,21 +60,24 @@ export default function computeInputData(manager, input) {
   input.overallVelocity = (abs(overallVelocity.x) > abs(overallVelocity.y)) 
     ? overallVelocity.x 
     : overallVelocity.y;
-
+  
+  // 多点触控 -- 缩放比例
   input.scale = firstMultiple
     ? getScale(firstMultiple.pointers, pointers)
     : 1;
-
+  
+  // 多点触控 -- 旋转角度
   input.rotation = firstMultiple
     ? getRotation(firstMultiple.pointers, pointers)
     : 0;
-
+  
+  // 首次输入数据没有prevInput
   input.maxPointers = !session.prevInput
-    ? input.pointers.length
+    ? pointers.length
     : (
-      (input.pointers.length > session.prevInput.maxPointers)
-        ? input.pointers.length
-        : session.prevInput.maxPointers
+      (pointers.length > session.prevInput.maxPointers)
+        ? pointers.length // 有新增
+        : session.prevInput.maxPointers // 有删除
     );
 
   computeIntervalInputData(session, input);

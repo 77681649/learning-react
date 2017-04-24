@@ -12,8 +12,8 @@
   <script>
     var manager = new Hammer(document.querySelector('#block'));
 
-    manager.on('tap', function (ev) {
-      console.log(ev)
+    manager.on('pan', function (ev) {
+      console.log(ev.offsetDirection)
     })
 
     console.log(document.body.style.touchAction)
