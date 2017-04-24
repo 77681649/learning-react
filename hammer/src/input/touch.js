@@ -1,9 +1,9 @@
 import {
-  INPUT_START,
-  INPUT_MOVE,
-  INPUT_END,
-  INPUT_CANCEL,
-  INPUT_TYPE_TOUCH
+    INPUT_START,
+    INPUT_MOVE,
+    INPUT_END,
+    INPUT_CANCEL,
+    INPUT_TYPE_TOUCH
 } from '../inputjs/input-consts';
 import Input from '../inputjs/input-constructor';
 import toArray from '../utils/to-array';
@@ -33,15 +33,12 @@ export default class TouchInput extends Input {
     super(...arguments);
 
     this.evTarget = TOUCH_TARGET_EVENTS;
-
-    // 存储目标元素上触点的id ( 用于在每次touch时  , 获得对应的changeTouches )
     this.targetIds = {};
   }
 
   handler(ev) {
     let type = TOUCH_INPUT_MAP[ev.type];
     let touches = getTouches.call(this, ev, type);
-
     if (!touches) {
       return;
     }
@@ -53,18 +50,6 @@ export default class TouchInput extends Input {
       srcEvent: ev
     });
   }
-
-  hasTargetId(id) {
-    return !!this.targetIds[id]
-  }
-
-  setTargetId(id) {
-    this.targetIds[id] = true
-  }
-
-  removeTargetId(id) {
-    delete this.targetIds[id]
-  }
 }
 
 /**
@@ -72,80 +57,59 @@ export default class TouchInput extends Input {
  * @this {TouchInput}
  * @param {Object} ev
  * @param {Number} type flag
- * @returns {undefined|Array} [all, changed] 如果有发生变化的触点 , 那么返回本次事件的涉及的所有触点以及目标元素上变化了的触点
+ * @returns {undefined|Array} [all, changed]
  */
 function getTouches(ev, type) {
-  let allTouches = toArray(ev.touches)
-  let isOnlyTouch = type & (INPUT_START | INPUT_MOVE) && allTouches.length === 1
+  let allTouches = toArray(ev.touches);
+  let { targetIds } = this;
 
-  return isOnlyTouch
-    ? getTouchesWhenSingleTouch(this, allTouches)
-    : getTouchesWhenMultiTouch(this, allTouches, toArray(ev.changedTouches), type)
-}
-
-function getTouchesWhenSingleTouch(input, allTouches) {
-  let { targetIds } = input;
-
-  input.setTargetId(allTouches[0].identifier)
-
-  return [allTouches, allTouches];
-}
-
-function getTouchesWhenMultiTouch(input, allTouches, changedTouches, type) {
-  let { targetIds, target } = input;
-  let targetTouches = getTouchesInTarget(allTouches, target)
-  let changedTargetTouches;
-
-  if (type === INPUT_START) {
-    collectTargetTouchIds(input, targetTouches)
+  // when there is only one touch, the process can be simplified
+  if (type & (INPUT_START | INPUT_MOVE) && allTouches.length === 1) {
+    targetIds[allTouches[0].identifier] = true;
+    return [allTouches, allTouches];
   }
 
-  changedTargetTouches = getChangedTargetTouch(input, changedTouches)
-
-  if (type & (INPUT_END | INPUT_CANCEL)) {
-    clearupRemovedTouches(input, type, changedTouches)
-  }
-
-  if (changedTargetTouches.length > 0) {
-    return [
-      // merge targetTouches with changedTargetTouches so it contains ALL touches, including 'end' and 'cancel'
-      uniqueArray(targetTouches.concat(changedTargetTouches), 'identifier', true),
-      changedTargetTouches
-    ];
-  }
-}
-
-function getTouchesInTarget(touches, target) {
-  return touches.filter(touch => hasParent(touch.target, target))
-}
-
-function collectTargetTouchIds(input, touches) {
-  let identifier
-
-  for (let i = 0, len = touches.length; i < len; i++) {
-    identifier = touches[i].identifier
-
-    input.setTargetId(identifier)
-  }
-}
-
-function getChangedTargetTouch(input, changedTouches) {
+  let i;
+  let targetTouches;
+  let changedTouches = toArray(ev.changedTouches);
   let changedTargetTouches = [];
+  let { target } = this;
 
-  for (let i = 0, len = changedTouches.length; i < len; i++) {
-    let identifier = changedTouches[i].identifier
+  // get target touches from touches
+  targetTouches = allTouches.filter((touch) => {
+    return hasParent(touch.target, target);
+  });
 
-    if (input.hasTargetId(identifier)) {
-      changedTargetTouches.push(changedTouches[i]);
+  // collect touches
+  if (type === INPUT_START) {
+    i = 0;
+    while (i < targetTouches.length) {
+      targetIds[targetTouches[i].identifier] = true;
+      i++;
     }
   }
 
-  return changedTargetTouches;
-}
+  // filter changed touches to only contain touches that exist in the collected target ids
+  i = 0;
+  while (i < changedTouches.length) {
+    if (targetIds[changedTouches[i].identifier]) {
+      changedTargetTouches.push(changedTouches[i]);
+    }
 
-function clearupRemovedTouches(input, type, changedTouches) {
-  for (let i = 0, len = changedTouches.length; i < len; i++) {
-    let identifier = changedTouches[i].identifier
-    input.removeTargetId(identifier)
+    // cleanup removed touches
+    if (type & (INPUT_END | INPUT_CANCEL)) {
+      delete targetIds[changedTouches[i].identifier];
+    }
+    i++;
   }
+
+  if (!changedTargetTouches.length) {
+    return;
+  }
+
+  return [
+      // merge targetTouches with changedTargetTouches so it contains ALL touches, including 'end' and 'cancel'
+      uniqueArray(targetTouches.concat(changedTargetTouches), 'identifier', true),
+      changedTargetTouches
+  ];
 }

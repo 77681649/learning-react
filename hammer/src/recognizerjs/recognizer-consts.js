@@ -1,3 +1,6 @@
+/**
+ * recognizer 状态
+ */
 const STATE_POSSIBLE = 1;
 const STATE_BEGAN = 2;
 const STATE_CHANGED = 4;

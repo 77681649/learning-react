@@ -1,3 +1,4 @@
+import boolOrFn from '../utils/bool-or-fn';
 import addEventListeners from '../utils/add-event-listeners';
 import removeEventListeners from '../utils/remove-event-listeners';
 import getWindowForElement from '../utils/get-window-for-element';
@@ -20,13 +21,14 @@ export default class Input {
 
     // smaller wrapper around the handler, for the scope and the enabled state of the manager,
     // so when disabled the input events are completely bypassed.
-    this.domHandler = ev => {
-      if (manager.isEnabled()) {
-        this.handler(ev);
+    this.domHandler = function(ev) {
+      if (boolOrFn(manager.options.enable, [manager])) {
+        self.handler(ev);
       }
     };
 
     this.init();
+
   }
   /**
    * @private

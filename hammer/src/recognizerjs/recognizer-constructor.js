@@ -1,11 +1,11 @@
 import {
-    STATE_POSSIBLE,
-    STATE_ENDED,
-    STATE_FAILED,
-    STATE_RECOGNIZED,
-    STATE_CANCELLED,
-    STATE_BEGAN,
-    STATE_CHANGED
+  STATE_POSSIBLE,
+  STATE_ENDED,
+  STATE_FAILED,
+  STATE_RECOGNIZED,
+  STATE_CANCELLED,
+  STATE_BEGAN,
+  STATE_CHANGED
 } from './recognizer-consts';
 import assign from '../utils/assign';
 import uniqueId from '../utils/unique-id';
@@ -297,6 +297,10 @@ export default class Recognizer {
    * @virtual
    */
   reset() { }
+
+  getEventName() {
+    return this.options.event
+  }
 }
 
 Recognizer.prototype.defaults = {};

@@ -1,15 +1,15 @@
 import {
-    TOUCH_ACTION_COMPUTE,
-    TOUCH_ACTION_MAP,
-    NATIVE_TOUCH_ACTION,
-    PREFIXED_TOUCH_ACTION,
-    TOUCH_ACTION_NONE,
-    TOUCH_ACTION_PAN_X,
-    TOUCH_ACTION_PAN_Y
+  TOUCH_ACTION_COMPUTE,
+  TOUCH_ACTION_MAP,
+  NATIVE_TOUCH_ACTION,
+  PREFIXED_TOUCH_ACTION,
+  TOUCH_ACTION_NONE,
+  TOUCH_ACTION_PAN_X,
+  TOUCH_ACTION_PAN_Y
 } from './touchaction-Consts';
 import {
-    DIRECTION_VERTICAL,
-    DIRECTION_HORIZONTAL
+  DIRECTION_VERTICAL,
+  DIRECTION_HORIZONTAL
 } from '../inputjs/input-consts';
 import each from '../utils/each';
 import boolOrFn from '../utils/bool-or-fn';
@@ -36,14 +36,18 @@ export default class TouchAction {
    * @param {String} value
    */
   set(value) {
+    let elementStyle = this.manager.getElement().style
+
     // find out the touch-action by the event handlers
     if (value === TOUCH_ACTION_COMPUTE) {
       value = this.compute();
     }
 
-    if (NATIVE_TOUCH_ACTION && this.manager.element.style && TOUCH_ACTION_MAP[value]) {
-      this.manager.element.style[PREFIXED_TOUCH_ACTION] = value;
+    // value是有效的值 , 那么设置属性值
+    if (NATIVE_TOUCH_ACTION && elementStyle && TOUCH_ACTION_MAP[value]) {
+      elementStyle[PREFIXED_TOUCH_ACTION] = value;
     }
+
     this.actions = value.toLowerCase().trim();
   }
 
@@ -62,11 +66,14 @@ export default class TouchAction {
    */
   compute() {
     let actions = [];
-    each(this.manager.recognizers, (recognizer) => {
+    let recognizers = this.manager.getRecognizers()
+
+    each(recognizers, (recognizer) => {
       if (boolOrFn(recognizer.options.enable, [recognizer])) {
         actions = actions.concat(recognizer.getTouchAction());
       }
     });
+
     return cleanTouchActions(actions.join(' '));
   }
 
@@ -107,8 +114,8 @@ export default class TouchAction {
     }
 
     if (hasNone ||
-        (hasPanY && direction & DIRECTION_HORIZONTAL) ||
-        (hasPanX && direction & DIRECTION_VERTICAL)) {
+      (hasPanY && direction & DIRECTION_HORIZONTAL) ||
+      (hasPanX && direction & DIRECTION_VERTICAL)) {
       return this.preventSrc(srcEvent);
     }
   }

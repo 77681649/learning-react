@@ -13,15 +13,15 @@ import getRotation from './get-rotation';
 import computeIntervalInputData from './compute-interval-input-data';
 
 /**
- * @private
+* @private
  * extend the data with some usable properties like scale, rotate, velocity etc
- * @param {Manager} manager 手势识别器的管理器实例
- * @param {InputData} input 输入数据
+ * @param {Object} manager
+ * @param {Object} input
  */
 export default function computeInputData(manager, input) {
   let { session } = manager;
   let { pointers } = input;
-  let { length: pointersLength } = pointers;
+  let { length:pointersLength } = pointers;
 
   // store the first input to calculate the distance and direction
   if (!session.firstInput) {
@@ -35,45 +35,29 @@ export default function computeInputData(manager, input) {
     session.firstMultiple = false;
   }
 
+  let { firstInput, firstMultiple } = session;
+  let offsetCenter = firstMultiple ? firstMultiple.center : firstInput.center;
+
+  let center = input.center = getCenter(pointers);
   input.timeStamp = now();
   input.deltaTime = input.timeStamp - firstInput.timeStamp;
 
-  let { firstInput, firstMultiple } = session;
-  let offsetCenter = firstMultiple ? firstMultiple.center : firstInput.center;
-  let center = input.center = getCenter(pointers);
-
-  // 两点之间的方位角
   input.angle = getAngle(offsetCenter, center);
-
-  // 两点之间的距离
   input.distance = getDistance(offsetCenter, center);
 
   computeDeltaXY(session, input);
-
   input.offsetDirection = getDirection(input.deltaX, input.deltaY);
 
   let overallVelocity = getVelocity(input.deltaTime, input.deltaX, input.deltaY);
   input.overallVelocityX = overallVelocity.x;
   input.overallVelocityY = overallVelocity.y;
-  input.overallVelocity = (abs(overallVelocity.x) > abs(overallVelocity.y)) 
-    ? overallVelocity.x 
-    : overallVelocity.y;
+  input.overallVelocity = (abs(overallVelocity.x) > abs(overallVelocity.y)) ? overallVelocity.x : overallVelocity.y;
 
-  input.scale = firstMultiple
-    ? getScale(firstMultiple.pointers, pointers)
-    : 1;
+  input.scale = firstMultiple ? getScale(firstMultiple.pointers, pointers) : 1;
+  input.rotation = firstMultiple ? getRotation(firstMultiple.pointers, pointers) : 0;
 
-  input.rotation = firstMultiple
-    ? getRotation(firstMultiple.pointers, pointers)
-    : 0;
-
-  input.maxPointers = !session.prevInput
-    ? input.pointers.length
-    : (
-      (input.pointers.length > session.prevInput.maxPointers)
-        ? input.pointers.length
-        : session.prevInput.maxPointers
-    );
+  input.maxPointers = !session.prevInput ? input.pointers.length : ((input.pointers.length >
+  session.prevInput.maxPointers) ? input.pointers.length : session.prevInput.maxPointers);
 
   computeIntervalInputData(session, input);
 
