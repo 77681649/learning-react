@@ -37,7 +37,8 @@ export default class SwipeRecognizer extends AttrRecognizer {
         direction & input.offsetDirection &&
         input.distance > this.options.threshold &&
         input.maxPointers === this.options.pointers &&
-        abs(velocity) > this.options.velocity && input.eventType & INPUT_END;
+        abs(velocity) > this.options.velocity && 
+        input.eventType & INPUT_END;
   }
 
   emit(input) {

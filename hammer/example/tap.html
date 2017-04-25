@@ -12,9 +12,25 @@
   <script>
     var manager = new Hammer(document.querySelector('#block'));
 
-    manager.on('pan', function (ev) {
-      console.log(ev.offsetDirection)
-    })
+    manager
+      .on('startpan', function () {
+        console.log('start')
+      })
+      .on('endpan', function () {
+        console.log('end')
+      })
+      .on('movepan', function () {
+        console.log('move')
+      })
+      .on('cancelpan', function () {
+        console.log('cancel')
+      })
+      .on('pan', function () {
+        console.log('pan')
+      })
+    // .on('pan', function (ev) {
+    //   console.log(ev.offsetDirection)
+    // })
 
     console.log(document.body.style.touchAction)
   </script>

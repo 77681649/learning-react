@@ -26,8 +26,10 @@ const FORCED_STOP = 2;
  * @property {InputData} prevInput 前一次输入的数据
  * @property {Point} prevDelta 前一次的偏移增量 ( 作为动作开始时的原点坐标 )
  * @property {Point} offsetDelta 第一次接触屏幕的点的clientX与clientY ( 作为基准点 )
- * @property {Boolean} stopped 
- * @property {Recognizer} curRecognizer
+ * @property {InputData} lastInterval 最后一次取样的输入数据
+ * @property {Boolean} prevented
+ * @property {Number} stopped 暂停识别 ( 1 - 暂停 ; 2 - 强制暂停 )
+ * @property {Recognizer} curRecognizer 正在被识别的手势 ( 一个会话中只能有一个 )
  */
 
 /**
@@ -45,7 +47,7 @@ export default class Manager {
 
     this.handlers = {};
 
-    // 会话 = 一次手势识别
+    // 会话 = 一次手势识别  
     this.session = {};
     this.recognizers = [];
     this.oldCssProps = {};
@@ -96,15 +98,20 @@ export default class Manager {
     this.session.stopped = force ? FORCED_STOP : STOP;
   }
 
+  isForceStop() {
+    return this.session.stopped === FORCED_STOP
+  }
+
   /**
    * @private
    * run the recognizers!
    * called by the inputHandler function on every movement of the pointers (touches)
    * it walks through all the recognizers and tries to detect the gesture that is being made
-   * @param {Object} inputData
+   * @param {InputData} inputData
    */
   recognize(inputData) {
     let { session } = this;
+
     if (session.stopped) {
       return;
     }
@@ -120,25 +127,17 @@ export default class Manager {
     // if no recognizer is detecting a thing, it is set to `null`
     let { curRecognizer } = session;
 
-    // reset when the last recognizer is recognized
-    // or when we're in a new session
-    if (!curRecognizer || (curRecognizer && curRecognizer.state & STATE_RECOGNIZED)) {
+    if (this.shouldResetCurrentRecognizer()) {
       curRecognizer = session.curRecognizer = null;
     }
 
-    let i = 0;
-    while (i < recognizers.length) {
+    for (let i = 0, len = recognizers.length; i < len; i++) {
       recognizer = recognizers[i];
 
-      // find out if we are allowed try to recognize the input for this one.
-      // 1.   allow if the session is NOT forced stopped (see the .stop() method)
-      // 2.   allow if we still haven't recognized a gesture in this session, or the this recognizer is the one
-      //      that is being recognized.
-      // 3.   allow if the recognizer is allowed to run simultaneous with the current recognized recognizer.
-      //      this can be setup with the `recognizeWith()` method on the recognizer.
-      if (session.stopped !== FORCED_STOP && (// 1
-        !curRecognizer || recognizer === curRecognizer || // 2
-        recognizer.canRecognizeWith(curRecognizer))) { // 3
+      if (
+        !this.isForceStop() &&
+        (this.isCurrentRecognizer(recognizer) || recognizer.canRecognizeWith(curRecognizer))
+      ) {
         recognizer.recognize(inputData);
       } else {
         recognizer.reset();
@@ -149,8 +148,22 @@ export default class Manager {
       if (!curRecognizer && recognizer.state & (STATE_BEGAN | STATE_CHANGED | STATE_ENDED)) {
         curRecognizer = session.curRecognizer = recognizer;
       }
-      i++;
     }
+  }
+
+  shouldResetCurrentRecognizer() {
+    let { curRecognizer } = this.session
+    let isNewSession = !curRecognizer
+    let isRecognized = curRecognizer && curRecognizer.state & STATE_RECOGNIZED
+
+    // 新的会话 && 手势已经被识别
+    return isNewSession || isRecognized
+  }
+
+  isCurrentRecognizer(recognizer) {
+    let { curRecognizer } = this.session
+
+    return !curRecognizer || recognizer === curRecognizer
   }
 
   /**

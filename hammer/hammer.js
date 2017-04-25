@@ -108,13 +108,13 @@ var DIRECTION_ALL = DIRECTION_HORIZONTAL | DIRECTION_VERTICAL;
 var PROPS_XY = ['x', 'y'];
 var PROPS_CLIENT_XY = ['clientX', 'clientY'];
 
-var STATE_POSSIBLE = 1;
-var STATE_BEGAN = 2;
-var STATE_CHANGED = 4;
-var STATE_ENDED = 8;
-var STATE_RECOGNIZED = STATE_ENDED;
-var STATE_CANCELLED = 16;
-var STATE_FAILED = 32;
+var STATE_POSSIBLE = 1; // 就绪
+var STATE_BEGAN = 2; //
+var STATE_CHANGED = 4; //
+var STATE_ENDED = 8; //
+var STATE_RECOGNIZED = STATE_ENDED; // 已被识别
+var STATE_CANCELLED = 16; //
+var STATE_FAILED = 32; // 识别失败 (  )
 
 /**
  * @private
@@ -481,7 +481,7 @@ function stateStr(state) {
  * If the recognizer has the state FAILED, CANCELLED or RECOGNIZED (equals ENDED), it is reset to
  * POSSIBLE to give it another change on the next cycle.
  *
- *               Possible
+ *               Possible ( 就绪 )
  *                  |
  *            +-----+---------------+
  *            |                     |
@@ -542,6 +542,7 @@ var Recognizer = function () {
     }
 
     /**
+     * 让当前识别器运行的时候同步运行所给的其它识别器
      * @private
      * recognize simultaneous with an other recognizer.
      * @param {Recognizer} otherRecognizer
@@ -566,6 +567,7 @@ var Recognizer = function () {
     }
 
     /**
+     * 在某个操作的时候，不执行otherRecognizer ( 只有当其它识别器（otherRecognizer）无效时才执行该识别器 )
      * @private
      * drop the simultaneous link. it doesnt remove the link on the other recognizer.
      * @param {Recognizer} otherRecognizer
@@ -643,6 +645,7 @@ var Recognizer = function () {
     }
 
     /**
+     * 判断otherRecognizer是否能与识别器一起工作
      * @private
      * if the recognizer can recognize simultaneous with an other recognizer
      * @param {Recognizer} otherRecognizer
@@ -729,9 +732,10 @@ var Recognizer = function () {
     }
 
     /**
+     * 
      * @private
      * update the recognizer
-     * @param {Object} inputData
+     * @param {InputData} inputData
      */
 
   }, {
@@ -760,9 +764,12 @@ var Recognizer = function () {
       if (this.state & (STATE_BEGAN | STATE_CHANGED | STATE_ENDED | STATE_CANCELLED)) {
         this.tryEmit(inputDataClone);
       }
+
+      console.log('state', this.state);
     }
 
     /**
+     * 根据inputData , 变换状态
      * @private
      * return the state of the recognizer
      * the actual recognizing happens in this method
@@ -1713,6 +1720,8 @@ function getDirection(x, y) {
     return x < 0 ? DIRECTION_LEFT : DIRECTION_RIGHT;
   }
 
+  // 往上越来越小
+  // 往下越来越大
   return y < 0 ? DIRECTION_UP : DIRECTION_DOWN;
 }
 
@@ -1731,6 +1740,7 @@ function computeDeltaXY(session, input) {
   var prevDelta = session.prevDelta || {};
   var prevInput = session.prevInput || {};
 
+  // 新增或移除触点都需要重置原点和起始点
   if (input.eventType === INPUT_START || prevInput.eventType === INPUT_END) {
     prevDelta = session.prevDelta = {
       x: prevInput.deltaX || 0,
@@ -1743,7 +1753,6 @@ function computeDeltaXY(session, input) {
     };
   }
 
-  console.log(center.y, offset.y);
   /**
    * prevDelta 坐标原点
    * offset 起始点
@@ -1756,6 +1765,7 @@ function computeDeltaXY(session, input) {
 }
 
 /**
+ * 计算移动到x,y的速度 ( 单位 px/ms )
  * @private
  * calculate the velocity between two points. unit is in px per ms.
  * @param {Number} deltaTime
@@ -1807,6 +1817,11 @@ function computeIntervalInputData(session, input) {
   var velocityY = void 0;
   var direction = void 0;
 
+  //
+  // 1. 不是CANCEL事件
+  // 2.1 deltaTime > COMPUTE_INTERVAL 到达采样间隔 
+  // 2.2 last.velocity === undefined 首次input
+  //
   if (input.eventType !== INPUT_CANCEL && (deltaTime > COMPUTE_INTERVAL || last.velocity === undefined)) {
     var deltaX = input.deltaX - last.deltaX;
     var deltaY = input.deltaY - last.deltaY;
@@ -1882,11 +1897,16 @@ function computeInputData(manager, input) {
   input.overallVelocityY = overallVelocity.y;
   input.overallVelocity = abs(overallVelocity.x) > abs(overallVelocity.y) ? overallVelocity.x : overallVelocity.y;
 
+  // 多点触控 -- 缩放比例
   input.scale = firstMultiple ? getScale(firstMultiple.pointers, pointers) : 1;
 
+  // 多点触控 -- 旋转角度
   input.rotation = firstMultiple ? getRotation(firstMultiple.pointers, pointers) : 0;
 
-  input.maxPointers = !session.prevInput ? input.pointers.length : input.pointers.length > session.prevInput.maxPointers ? input.pointers.length : session.prevInput.maxPointers;
+  // 首次输入数据没有prevInput
+  input.maxPointers = !session.prevInput ? pointers.length : pointers.length > session.prevInput.maxPointers ? pointers.length // 有新增
+  : session.prevInput.maxPointers // 有删除
+  ;
 
   computeIntervalInputData(session, input);
 
@@ -2605,8 +2625,10 @@ var FORCED_STOP = 2;
  * @property {InputData} prevInput 前一次输入的数据
  * @property {Point} prevDelta 前一次的偏移增量 ( 作为动作开始时的原点坐标 )
  * @property {Point} offsetDelta 第一次接触屏幕的点的clientX与clientY ( 作为基准点 )
- * @property {Boolean} stopped 
- * @property {Recognizer} curRecognizer
+ * @property {InputData} lastInterval 最后一次取样的输入数据
+ * @property {Boolean} prevented
+ * @property {Number} stopped 暂停识别 ( 1 - 暂停 ; 2 - 强制暂停 )
+ * @property {Recognizer} curRecognizer 正在被识别的手势 ( 一个会话中只能有一个 )
  */
 
 /**
@@ -2686,19 +2708,25 @@ var Manager = function () {
     value: function stop(force) {
       this.session.stopped = force ? FORCED_STOP : STOP;
     }
+  }, {
+    key: 'isForceStop',
+    value: function isForceStop() {
+      return this.session.stopped === FORCED_STOP;
+    }
 
     /**
      * @private
      * run the recognizers!
      * called by the inputHandler function on every movement of the pointers (touches)
      * it walks through all the recognizers and tries to detect the gesture that is being made
-     * @param {Object} inputData
+     * @param {InputData} inputData
      */
 
   }, {
     key: 'recognize',
     value: function recognize(inputData) {
       var session = this.session;
+
 
       if (session.stopped) {
         return;
@@ -2716,27 +2744,15 @@ var Manager = function () {
 
       var curRecognizer = session.curRecognizer;
 
-      // reset when the last recognizer is recognized
-      // or when we're in a new session
 
-      if (!curRecognizer || curRecognizer && curRecognizer.state & STATE_RECOGNIZED) {
+      if (this.shouldResetCurrentRecognizer()) {
         curRecognizer = session.curRecognizer = null;
       }
 
-      var i = 0;
-      while (i < recognizers.length) {
+      for (var i = 0, len = recognizers.length; i < len; i++) {
         recognizer = recognizers[i];
 
-        // find out if we are allowed try to recognize the input for this one.
-        // 1.   allow if the session is NOT forced stopped (see the .stop() method)
-        // 2.   allow if we still haven't recognized a gesture in this session, or the this recognizer is the one
-        //      that is being recognized.
-        // 3.   allow if the recognizer is allowed to run simultaneous with the current recognized recognizer.
-        //      this can be setup with the `recognizeWith()` method on the recognizer.
-        if (session.stopped !== FORCED_STOP && ( // 1
-        !curRecognizer || recognizer === curRecognizer || // 2
-        recognizer.canRecognizeWith(curRecognizer))) {
-          // 3
+        if (!this.isForceStop() && (this.isCurrentRecognizer(recognizer) || recognizer.canRecognizeWith(curRecognizer))) {
           recognizer.recognize(inputData);
         } else {
           recognizer.reset();
@@ -2747,8 +2763,26 @@ var Manager = function () {
         if (!curRecognizer && recognizer.state & (STATE_BEGAN | STATE_CHANGED | STATE_ENDED)) {
           curRecognizer = session.curRecognizer = recognizer;
         }
-        i++;
       }
+    }
+  }, {
+    key: 'shouldResetCurrentRecognizer',
+    value: function shouldResetCurrentRecognizer() {
+      var curRecognizer = this.session.curRecognizer;
+
+      var isNewSession = !curRecognizer;
+      var isRecognized = curRecognizer && curRecognizer.state & STATE_RECOGNIZED;
+
+      // 新的会话 && 手势已经被识别
+      return isNewSession || isRecognized;
+    }
+  }, {
+    key: 'isCurrentRecognizer',
+    value: function isCurrentRecognizer(recognizer) {
+      var curRecognizer = this.session.curRecognizer;
+
+
+      return !curRecognizer || recognizer === curRecognizer;
     }
 
     /**

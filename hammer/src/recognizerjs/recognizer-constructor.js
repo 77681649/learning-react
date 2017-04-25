@@ -1,11 +1,11 @@
 import {
-    STATE_POSSIBLE,
-    STATE_ENDED,
-    STATE_FAILED,
-    STATE_RECOGNIZED,
-    STATE_CANCELLED,
-    STATE_BEGAN,
-    STATE_CHANGED
+  STATE_POSSIBLE,
+  STATE_ENDED,
+  STATE_FAILED,
+  STATE_RECOGNIZED,
+  STATE_CANCELLED,
+  STATE_BEGAN,
+  STATE_CHANGED
 } from './recognizer-consts';
 import assign from '../utils/assign';
 import uniqueId from '../utils/unique-id';
@@ -29,7 +29,7 @@ import stateStr from './state-str';
  * If the recognizer has the state FAILED, CANCELLED or RECOGNIZED (equals ENDED), it is reset to
  * POSSIBLE to give it another change on the next cycle.
  *
- *               Possible
+ *               Possible ( 就绪 )
  *                  |
  *            +-----+---------------+
  *            |                     |
@@ -83,6 +83,7 @@ export default class Recognizer {
   }
 
   /**
+   * 让当前识别器运行的时候同步运行所给的其它识别器
    * @private
    * recognize simultaneous with an other recognizer.
    * @param {Recognizer} otherRecognizer
@@ -103,6 +104,7 @@ export default class Recognizer {
   }
 
   /**
+   * 在某个操作的时候，不执行otherRecognizer ( 只有当其它识别器（otherRecognizer）无效时才执行该识别器 )
    * @private
    * drop the simultaneous link. it doesnt remove the link on the other recognizer.
    * @param {Recognizer} otherRecognizer
@@ -131,10 +133,13 @@ export default class Recognizer {
 
     let { requireFail } = this;
     otherRecognizer = getRecognizerByNameIfManager(otherRecognizer, this);
+    
+    // 两个手势互斥
     if (inArray(requireFail, otherRecognizer) === -1) {
       requireFail.push(otherRecognizer);
       otherRecognizer.requireFailure(this);
     }
+
     return this;
   }
 
@@ -167,6 +172,7 @@ export default class Recognizer {
   }
 
   /**
+   * 判断otherRecognizer是否能与识别器一起工作
    * @private
    * if the recognizer can recognize simultaneous with an other recognizer
    * @param {Recognizer} otherRecognizer
@@ -177,6 +183,7 @@ export default class Recognizer {
   }
 
   /**
+   * 根据状态触发响应的事件
    * @private
    * You should use `tryEmit` instead of `emit` directly to check
    * that all the needed recognizers has failed before emitting.
@@ -223,25 +230,29 @@ export default class Recognizer {
   }
 
   /**
+   * 判断是否能触发事件 -- 只有在所有互斥的识别器的状态为STATE_FAILED 或 STATE_POSSIBLE 的情况下才能触发事件
    * @private
    * can we emit?
    * @returns {boolean}
    */
   canEmit() {
     let i = 0;
+
     while (i < this.requireFail.length) {
       if (!(this.requireFail[i].state & (STATE_FAILED | STATE_POSSIBLE))) {
         return false;
       }
       i++;
     }
+
     return true;
   }
 
   /**
+   * 
    * @private
    * update the recognizer
-   * @param {Object} inputData
+   * @param {InputData} inputData
    */
   recognize(inputData) {
     // make a new copy of the inputData
@@ -270,6 +281,7 @@ export default class Recognizer {
   }
 
   /**
+   * 根据inputData , 变换状态
    * @private
    * return the state of the recognizer
    * the actual recognizing happens in this method

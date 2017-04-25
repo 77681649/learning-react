@@ -17,6 +17,11 @@ export default function computeIntervalInputData(session, input) {
   let velocityY;
   let direction;
 
+  //
+  // 1. 不是CANCEL事件
+  // 2.1 deltaTime > COMPUTE_INTERVAL 到达采样间隔 
+  // 2.2 last.velocity === undefined 首次input
+  //
   if (input.eventType !== INPUT_CANCEL && (deltaTime > COMPUTE_INTERVAL || last.velocity === undefined)) {
     let deltaX = input.deltaX - last.deltaX;
     let deltaY = input.deltaY - last.deltaY;
