@@ -7,27 +7,69 @@
 </head>
 
 <body>
-  <div id="block" style="margin-top:2000px;background:red;width:200px;height:200px;">&nbsp;</div>
+  <div id="block" style="background:red;width:200px;height:200px;">&nbsp;</div>
+
   <script src="../../hammer.js"></script>
   <script>
-    var manager = new Hammer(document.querySelector('#block'));
+    this.x = 0
+    this.y = 0
+
+    this.x1 = 0
+    this.y1 = 0
+
+    var element = document.querySelector('#block')
+    var manager = new Hammer(element);
+    var move = (x, y) => {
+      x = this.x1 + x
+      y = this.y1 + y
+
+      console.log(x, y)
+
+      let transform = `translate3d(${x}px ,${y}px , 0)`
+
+      if (element) {
+        element.style.transform = transform
+      }
+    }
 
     manager
-      .on('startpan', function () {
-        console.log('start')
+      .on('swiperight',function(){
+        console.log('swiperight')
       })
-      .on('endpan', function () {
-        console.log('end')
-      })
-      .on('movepan', function () {
-        console.log('move')
-      })
-      .on('cancelpan', function () {
-        console.log('cancel')
-      })
-      .on('pan', function () {
-        console.log('pan')
-      })
+      // .on('startpan', function () {
+      //   console.log('start')
+      // })
+      // .on('endpan', function () {
+      //   console.log('end')
+      // })
+      // .on('movepan', function () {
+      //   console.log('move')
+      // })
+      // .on('cancelpan', function () {
+      //   console.log('cancel')
+      // })
+      // .on('panleft', function (data) {
+      //   move(data.deltaX, data.deltaY)
+      //   console.log('panleft')
+      // })
+      // .on('panright', function (data) {
+      //   move(data.deltaX, data.deltaY)
+      //   console.log('panright')
+      // })
+      // .on('panup', function (data) {
+      //   move(data.deltaX, data.deltaY)
+      //   console.log('panup')
+      // })
+      // .on('pandown', function (data) {
+      //   move(data.deltaX, data.deltaY)
+      //   console.log('pandown')
+      // })
+      // .on('panend', data => {
+      //   this.x1 = data.deltaX
+      //   this.y1 = data.deltaY
+      // })
+
+
     // .on('pan', function (ev) {
     //   console.log(ev.offsetDirection)
     // })

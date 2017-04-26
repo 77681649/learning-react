@@ -1,4 +1,4 @@
-/*! Hammer.JS - v2.0.8 - 2017-04-25
+/*! Hammer.JS - v2.0.8 - 2017-04-26
  * http://hammerjs.github.io/
  *
  * Copyright (c)  Jorik Tangelder;
@@ -603,10 +603,13 @@ var Recognizer = function () {
       var requireFail = this.requireFail;
 
       otherRecognizer = getRecognizerByNameIfManager(otherRecognizer, this);
+
+      // 两个手势互斥
       if (inArray(requireFail, otherRecognizer) === -1) {
         requireFail.push(otherRecognizer);
         otherRecognizer.requireFailure(this);
       }
+
       return this;
     }
 
@@ -659,6 +662,7 @@ var Recognizer = function () {
     }
 
     /**
+     * 根据状态触发响应的事件
      * @private
      * You should use `tryEmit` instead of `emit` directly to check
      * that all the needed recognizers has failed before emitting.
@@ -713,6 +717,7 @@ var Recognizer = function () {
     }
 
     /**
+     * 判断是否能触发事件 -- 只有在所有互斥的识别器的状态为STATE_FAILED 或 STATE_POSSIBLE 的情况下才能触发事件
      * @private
      * can we emit?
      * @returns {boolean}
@@ -722,12 +727,14 @@ var Recognizer = function () {
     key: 'canEmit',
     value: function canEmit() {
       var i = 0;
+
       while (i < this.requireFail.length) {
         if (!(this.requireFail[i].state & (STATE_FAILED | STATE_POSSIBLE))) {
           return false;
         }
         i++;
       }
+
       return true;
     }
 
@@ -764,8 +771,6 @@ var Recognizer = function () {
       if (this.state & (STATE_BEGAN | STATE_CHANGED | STATE_ENDED | STATE_CANCELLED)) {
         this.tryEmit(inputDataClone);
       }
-
-      console.log('state', this.state);
     }
 
     /**
@@ -861,17 +866,44 @@ var AttrRecognizer = function (_Recognizer) {
       var isRecognized = state & (STATE_BEGAN | STATE_CHANGED);
       var isValid = this.attrTest(input);
 
+      /**
+       * CANCELLED 
+       * 1. 之前已经识别
+       * 2. 事件类型 = CANCEL 或者 参数无效
+       * 
+       * STATE_ENDED
+       * 1. 之前被识别到了 或者 参数有效
+       * 2. 事件类型 = END
+       * 
+       * STATE_BEGAN
+       * 1. 之前被识别到了 或者 参数有效
+       * 2. 状态中不包含BEGIN ( 可能是START事件时没有识别 , 到了CHANGE事件识别到了 )
+       * 
+       * STATE_CHANGED
+       * 1. 之前被识别到了 或者 参数有效
+       * 2. 事件类型 = CHANGE
+       * 
+       * STATE_FAILED
+       * 1. disabled
+       * 2. 参数无效
+       * 3. 之前没有识别过的 && 事件 = INPUT_CANCEL
+       * 4. 参数有效 && 之前没有识别过
+       * 5. 无法触发事件 , 也被认为识别失败
+       */
       // on cancel input and we've recognized before, return STATE_CANCELLED
       if (isRecognized && (eventType & INPUT_CANCEL || !isValid)) {
         return state | STATE_CANCELLED;
       } else if (isRecognized || isValid) {
+
         if (eventType & INPUT_END) {
           return state | STATE_ENDED;
         } else if (!(state & STATE_BEGAN)) {
           return STATE_BEGAN;
         }
+
         return state | STATE_CHANGED;
       }
+
       return STATE_FAILED;
     }
   }]);
@@ -1046,7 +1078,9 @@ var PanRecognizer = function (_AttrRecognizer) {
           distance = Math.abs(input.deltaY);
         }
       }
+
       input.direction = direction;
+
       return hasMoved && distance > options.threshold && direction & options.direction;
     }
   }, {
@@ -2651,7 +2685,7 @@ var Manager = function () {
 
     this.handlers = {};
 
-    // 会话 = 一次手势识别
+    // 会话 = 一次手势识别  
     this.session = {};
     this.recognizers = [];
     this.oldCssProps = {};
